@@ -52,10 +52,9 @@ export async function parseSessionFile(
   const seen = new Set<string>();
 
   for await (const entry of parseJSONLStream(filePath)) {
-    // Deduplication
-    const hash = `${entry.message?.id || entry.uuid}:${entry.requestId || ''}`;
-    if (seen.has(hash)) continue;
-    seen.add(hash);
+    // Deduplication - use uuid (unique per chunk) not message.id (same across streaming chunks)
+    if (seen.has(entry.uuid)) continue;
+    seen.add(entry.uuid);
 
     // Extract metadata from first entry
     if (!sessionId && entry.sessionId) {
@@ -170,6 +169,7 @@ function extractToolUses(content: MessageContent[] | undefined): ToolUse[] {
       tools.push({
         name: item.name,
         input: summarizeToolInput(item.name, item.input),
+        rawInput: item.input,
       });
     }
   }
@@ -211,7 +211,7 @@ function truncate(str: string, maxLength: number): string {
 
 /**
  * Create a condensed transcript for LLM summarization
- * Focuses on user requests and key actions
+ * Leads with action summary (files changed) to ensure implementation work is captured
  */
 export function createCondensedTranscript(session: ParsedSession): string {
   const parts: string[] = [];
@@ -223,32 +223,74 @@ export function createCondensedTranscript(session: ParsedSession): string {
   parts.push(`Duration: ${formatDuration(session.startTime, session.endTime)}`);
   parts.push('');
 
-  // Extract user requests, assistant responses, and tool actions
+  // LEAD with files changed - this is the most important signal of actual work
+  const filesWritten: string[] = [];
+  const filesEdited: string[] = [];
+  const commandsRun: string[] = [];
+
   for (const msg of session.messages) {
-    if (msg.type === 'user' && msg.text) {
-      // Include user prompts (truncated)
-      const text = msg.text.slice(0, 500);
-      parts.push(`User: ${text}`);
-    } else if (msg.type === 'assistant') {
-      // Include assistant text responses
-      if (msg.text) {
-        const text = msg.text.slice(0, 400);
-        parts.push(`Assistant: ${text}`);
-      }
-      // Also include tool usage
-      if (msg.toolUses.length > 0) {
-        const toolSummary = msg.toolUses
-          .map((t) => `${t.name}: ${t.input}`)
-          .join(', ');
-        parts.push(`Tools: ${toolSummary.slice(0, 300)}`);
+    if (msg.type === 'assistant') {
+      for (const tool of msg.toolUses) {
+        if (tool.name === 'Write') {
+          const path = String((tool.rawInput as any)?.file_path || '');
+          if (path && !filesWritten.includes(path)) {
+            filesWritten.push(path);
+          }
+        } else if (tool.name === 'Edit') {
+          const path = String((tool.rawInput as any)?.file_path || '');
+          if (path && !filesEdited.includes(path)) {
+            filesEdited.push(path);
+          }
+        } else if (tool.name === 'Bash') {
+          const cmd = String((tool.rawInput as any)?.command || '').slice(0, 100);
+          if (cmd && commandsRun.length < 10) {
+            commandsRun.push(cmd);
+          }
+        }
       }
     }
   }
 
-  // Add stats
-  parts.push('');
-  parts.push(`Stats: ${session.stats.userMessages} user messages, ${session.stats.assistantMessages} assistant messages`);
+  // Show action summary at the TOP
+  if (filesWritten.length > 0) {
+    parts.push(`FILES CREATED (${filesWritten.length}):`);
+    filesWritten.slice(0, 15).forEach(f => parts.push(`  - ${f}`));
+    if (filesWritten.length > 15) parts.push(`  ... and ${filesWritten.length - 15} more`);
+    parts.push('');
+  }
 
+  if (filesEdited.length > 0) {
+    parts.push(`FILES EDITED (${filesEdited.length}):`);
+    filesEdited.slice(0, 15).forEach(f => parts.push(`  - ${f}`));
+    if (filesEdited.length > 15) parts.push(`  ... and ${filesEdited.length - 15} more`);
+    parts.push('');
+  }
+
+  if (commandsRun.length > 0) {
+    parts.push(`COMMANDS RUN (${commandsRun.length}):`);
+    commandsRun.slice(0, 5).forEach(c => parts.push(`  $ ${c}`));
+    parts.push('');
+  }
+
+  // Then show conversation context (but less of it)
+  parts.push('CONVERSATION:');
+  let messageCount = 0;
+  for (const msg of session.messages) {
+    if (messageCount > 20) break; // Limit to avoid overwhelming
+
+    if (msg.type === 'user' && msg.text) {
+      const text = msg.text.slice(0, 300);
+      parts.push(`User: ${text}`);
+      messageCount++;
+    } else if (msg.type === 'assistant' && msg.text) {
+      const text = msg.text.slice(0, 200);
+      parts.push(`Assistant: ${text}`);
+      messageCount++;
+    }
+  }
+
+  // Add stats at end
+  parts.push('');
   const toolSummary = Object.entries(session.stats.toolCalls)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)

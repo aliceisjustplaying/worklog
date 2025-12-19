@@ -56,6 +56,7 @@ export interface ParsedMessage {
 export interface ToolUse {
   name: string;
   input: string; // Truncated/summarized
+  rawInput?: Record<string, unknown>; // Full input for file path extraction
 }
 
 export interface SessionStats {
