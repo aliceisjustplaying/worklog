@@ -2,8 +2,10 @@
 
 Automatically generates a daily worklog from your Claude Code sessions. See what you actually accomplished, not what you looked at.
 
-![Day list view](screenshot1.png)
-![Day detail view](screenshot2.png)
+<p>
+  <img src="screenshot1.png" width="49%" />
+  <img src="screenshot2.png" width="49%" />
+</p>
 
 ## What it does
 
