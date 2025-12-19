@@ -21,17 +21,17 @@ export default function DayView() {
 
   return (
     <div>
-      <div className="mb-8">
-        <Link to="/" className="inline-flex items-center text-sm text-slate-500 hover:text-blue-600 mb-4 transition-colors">
+      <div className="mb-4">
+        <Link to="/" className="inline-flex items-center text-sm text-slate-500 hover:text-blue-600 mb-2 transition-colors">
           <ArrowLeft size={16} className="mr-1" />
-          Back to History
+          Back
         </Link>
-        <h1 className="text-3xl font-bold text-slate-900">{formattedDate}</h1>
+        <h1 className="text-2xl font-bold text-slate-900">{formattedDate}</h1>
       </div>
 
       {day.bragSummary && <BragSummary summary={day.bragSummary} />}
 
-      <div className="space-y-8">
+      <div className="space-y-3">
         {day.projects.map((project) => (
           <ProjectCard key={project.path} project={project} />
         ))}

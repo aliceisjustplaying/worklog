@@ -26,29 +26,28 @@ export default function ProjectCard({ project }: Props) {
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
+    <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-6 bg-gray-50/50 hover:bg-gray-50 transition-colors text-left"
+        className="w-full flex items-center justify-between p-3 bg-gray-50/50 hover:bg-gray-50 transition-colors text-left"
       >
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-            <Folder size={20} />
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 bg-blue-100 text-blue-600 rounded">
+            <Folder size={16} />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-slate-800">{project.name}</h3>
-            <p className="text-xs text-slate-500 font-mono mt-0.5">{project.path}</p>
+            <h3 className="text-sm font-bold text-slate-800">{project.name}</h3>
           </div>
         </div>
-        <div className="flex items-center gap-4 text-slate-500">
-          <span className="text-sm font-medium">{project.sessions.length} sessions</span>
-          {expanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+        <div className="flex items-center gap-3 text-slate-500">
+          <span className="text-xs font-medium">{project.sessions.length} sessions</span>
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
       </button>
 
       {expanded && (
-        <div className="p-6 pt-2">
-          <div className="mt-6 ml-2">
+        <div className="px-3 pb-3">
+          <div className="mt-2 ml-1">
             {project.sessions.map((session) => (
               <SessionItem key={session.sessionId} session={session} />
             ))}
