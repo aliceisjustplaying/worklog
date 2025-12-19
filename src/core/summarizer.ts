@@ -142,14 +142,14 @@ export async function generateDailyBragSummary(
 
   const systemPrompt = `Summarize a developer's daily work. Keep the 3-5 most significant items per project.
 
-FORMAT: "feature1, feature2; fixed thing (scope)"
-- Scope: frontend, backend, or both
+FORMAT: "feature1, feature2; fixed thing"
 - Pick the BIGGEST wins - skip minor fixes, docs, tests, refactoring
 - Consolidate related work: "3 notification fixes" → "notification handling"
+- Include ALL projects - never omit a project entirely, even if work was minor
 
 Examples:
-- "date filtering, new project detection; fixed path resolution (backend, frontend)"
-- "multi-dose scheduling, CSV export (backend, frontend)"
+- "date filtering, new project detection; fixed path resolution"
+- "multi-dose scheduling, CSV export"
 
 Use exact project names. Max ~15 words per project.`;
 

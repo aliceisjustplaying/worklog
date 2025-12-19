@@ -2,6 +2,9 @@
 
 Automatically generates a daily worklog from your Claude Code sessions. See what you actually accomplished, not what you looked at.
 
+![Day list view](screenshot1.png)
+![Day detail view](screenshot2.png)
+
 ## What it does
 
 - Scans Claude Code session files from `~/.claude/projects/`
@@ -51,6 +54,15 @@ bun cli regenerate --force   # Regenerate all daily summaries
 | `SUMMARIZER_MODEL` | `claude-haiku-4-5-20251001` | Model for summarization |
 
 ## How it works
+
+**Session location**: Looks for Claude Code sessions in `~/.claude/projects/` and `~/.config/claude/projects/`. To use a custom path, set `CLAUDE_CONFIG_DIR` (comma-separated for multiple). See `getClaudePaths()` in `src/core/session-detector.ts`.
+
+**Project path detection**: Claude encodes paths with dashes (`-Users-USERNAME-src-a-myproject`), which is lossy. The tool has special handling for:
+- `~/src/a/` - active projects
+- `~/src/tries/` - experiments (date prefixes like `2025-12-15-foo` → `foo`)
+- `~` - home directory sessions shown as "~"
+
+To customize for your own folder structure, edit `decodeProjectFolder()` in `src/core/session-detector.ts`.
 
 **Session filtering**: Only sessions with actual code changes are included. Reading, searching, and exploring don't count as work.
 
