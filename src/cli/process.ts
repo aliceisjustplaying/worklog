@@ -214,9 +214,9 @@ export async function processCommand(options: ProcessOptions): Promise<{
     console.log('');
   }
 
-  // Generate brag summaries for new dates
+  // Generate brag summaries for dates that had new sessions
   console.log('📝 Generating daily summaries...\n');
-  await generateMissingBragSummaries(verbose);
+  await regenerateSummariesForDates(datesProcessed, verbose);
 
   console.log(`\n✅ Done! Processed ${processed} sessions (${errors} errors)\n`);
   console.log('Run `bun cli serve` to view your worklog.\n');
@@ -330,10 +330,17 @@ async function processSession(
   };
 }
 
-async function generateMissingBragSummaries(verbose: boolean): Promise<void> {
+async function regenerateSummariesForDates(
+  datesToRegenerate: Set<string>,
+  verbose: boolean
+): Promise<void> {
+  // Also include any dates that have never had a summary generated
   const datesWithoutSummary = getDatesWithoutBragSummary();
+  const allDates = new Set([...datesToRegenerate, ...datesWithoutSummary]);
 
-  for (const date of datesWithoutSummary) {
+  if (allDates.size === 0) return;
+
+  for (const date of allDates) {
     try {
       const sessions = getSessionsForDate(date);
       if (sessions.length === 0) continue;
