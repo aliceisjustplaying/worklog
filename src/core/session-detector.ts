@@ -1,8 +1,29 @@
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { existsSync, readdirSync, statSync } from 'fs';
 import { createHash } from 'crypto';
 import { isFileProcessed } from './db';
+
+/**
+ * Find the git root for a given path.
+ * Returns the path if it's a git root, or walks up to find one.
+ * Returns null if no git root is found.
+ */
+function findGitRoot(path: string): string | null {
+  let current = path;
+  const root = '/';
+
+  while (current !== root) {
+    if (existsSync(join(current, '.git'))) {
+      return current;
+    }
+    const parent = dirname(current);
+    if (parent === current) break; // Reached filesystem root
+    current = parent;
+  }
+
+  return null;
+}
 
 export interface SessionFile {
   path: string;
@@ -29,19 +50,68 @@ export function getClaudePaths(): string[] {
 }
 
 /**
+ * Try different interpretations of a dash-separated string by progressively
+ * replacing dashes with slashes from right to left.
+ *
+ * For "taper-calculator-apps-web", tries:
+ *   1. taper-calculator-apps-web (all dashes literal)
+ *   2. taper-calculator-apps/web
+ *   3. taper-calculator/apps/web
+ *   4. taper/calculator/apps/web (all dashes as slashes)
+ *
+ * Returns the first path that exists on the filesystem.
+ */
+function resolveProjectPath(basePath: string, projectPart: string): string {
+  // Split on dashes
+  const parts = projectPart.split('-');
+
+  // Try interpretations from "all dashes literal" to "all dashes as slashes"
+  // We iterate by how many trailing parts are split off as directories
+  for (let splitCount = 0; splitCount <= parts.length - 1; splitCount++) {
+    let path: string;
+
+    if (splitCount === 0) {
+      // Keep all dashes - treat entire projectPart as folder name
+      path = `${basePath}/${projectPart}`;
+    } else {
+      // Split the last N parts as subdirectories
+      const projectNameParts = parts.slice(0, parts.length - splitCount);
+      const subdirParts = parts.slice(parts.length - splitCount);
+      const projectName = projectNameParts.join('-');
+      const subdirs = subdirParts.join('/');
+      path = `${basePath}/${projectName}/${subdirs}`;
+    }
+
+    if (existsSync(path)) {
+      return path;
+    }
+  }
+
+  // Nothing exists - return the literal interpretation (all dashes preserved)
+  return `${basePath}/${projectPart}`;
+}
+
+/**
  * Decode project folder name back to path and extract project name.
  *
  * Claude encodes paths by replacing / with - but project folders under
- * src/a/ or src/tries/ keep their dashes as the project name.
+ * src/a/ or src/tries/ may have dashes in their actual names.
+ *
+ * Since the encoding is lossy, we probe the filesystem to find the correct
+ * interpretation, then use git root as the canonical project identity.
  *
  * Examples:
  *   -Users-USERNAME-src-a-drink-reminder-native
+ *     -> tries: drink-reminder-native (exists!) ✓
  *     -> path: /Users/USERNAME/src/a/drink-reminder-native
  *     -> name: drink-reminder-native
  *
- *   -Users-USERNAME-src-tries-2025-12-01-myproject
- *     -> path: /Users/USERNAME/src/tries/2025-12-01-myproject
- *     -> name: 2025-12-01-myproject
+ *   -Users-USERNAME-src-a-taper-calculator-apps-web
+ *     -> tries: taper-calculator-apps-web (doesn't exist)
+ *     -> tries: taper-calculator-apps/web (doesn't exist)
+ *     -> tries: taper-calculator/apps/web (exists!) ✓
+ *     -> git root: /Users/USERNAME/src/a/taper-calculator
+ *     -> name: taper-calculator
  */
 export function decodeProjectFolder(folderName: string): { path: string; name: string } {
   // Remove leading dash
@@ -51,38 +121,39 @@ export function decodeProjectFolder(folderName: string): { path: string; name: s
   const srcAMatch = withoutLeading.match(/^(Users-[^-]+-src-a)-(.+)$/);
   const srcTriesMatch = withoutLeading.match(/^(Users-[^-]+-src-tries)-(.+)$/);
 
+  let decodedPath: string;
+
   if (srcAMatch) {
     const basePath = '/' + srcAMatch[1].replace(/-/g, '/');
-    const projectName = srcAMatch[2]; // Keep dashes
-    return {
-      path: `${basePath}/${projectName}`,
-      name: projectName,
-    };
-  }
-
-  if (srcTriesMatch) {
+    const projectPart = srcAMatch[2];
+    decodedPath = resolveProjectPath(basePath, projectPart);
+  } else if (srcTriesMatch) {
     const basePath = '/' + srcTriesMatch[1].replace(/-/g, '/');
-    const projectName = srcTriesMatch[2]; // Keep dashes
-    return {
-      path: `${basePath}/${projectName}`,
-      name: projectName,
-    };
+    const projectPart = srcTriesMatch[2];
+    decodedPath = resolveProjectPath(basePath, projectPart);
+  } else {
+    // Fallback: just replace all dashes with slashes
+    decodedPath = '/' + withoutLeading.replace(/-/g, '/');
   }
-
-  // Fallback: just the folder name with leading dash removed, last segment as name
-  const parts = withoutLeading.split('-');
-  const path = '/' + withoutLeading.replace(/-/g, '/');
 
   // Special case: home directory should show as "~"
   const homeDir = homedir();
-  if (path === homeDir) {
-    return { path, name: '~' };
+  if (decodedPath === homeDir) {
+    return { path: decodedPath, name: '~' };
   }
 
-  return {
-    path,
-    name: parts[parts.length - 1] || 'unknown',
-  };
+  // Try to find git root to normalize monorepo subdirectories
+  if (existsSync(decodedPath)) {
+    const gitRoot = findGitRoot(decodedPath);
+    if (gitRoot) {
+      const projectName = gitRoot.split('/').pop() || 'unknown';
+      return { path: gitRoot, name: projectName };
+    }
+  }
+
+  // No git root found - use the decoded path as-is
+  const projectName = decodedPath.split('/').pop() || 'unknown';
+  return { path: decodedPath, name: projectName };
 }
 
 /**
