@@ -238,21 +238,15 @@ async function processSession(
     }
   }
 
-  // Skip sessions with no meaningful work
-  // But be careful not to filter out quick fixes!
+  // Skip sessions with no actual code changes
+  // Exploration (reading, searching) doesn't count as work
   const tools = parsed.stats.toolCalls;
-  const toolCallCount = Object.values(tools).reduce((a, b) => a + b, 0);
 
-  // Tools that indicate actual code changes happened
+  // Only these tools indicate actual work happened
   const codeChangeTools = ['Edit', 'Write', 'NotebookEdit', 'MultiEdit'];
   const hasCodeChanges = codeChangeTools.some(tool => (tools[tool] || 0) > 0);
 
-  // If code was changed, always keep it (even a 1-line quickfix)
-  // Otherwise require substantial exploration/conversation
-  const hasSubstantialWork = toolCallCount >= 3;
-  const hasLongConversation = parsed.stats.assistantMessages >= 5;
-
-  if (!hasCodeChanges && !hasSubstantialWork && !hasLongConversation) {
+  if (!hasCodeChanges) {
     // Mark as processed but don't save to DB
     markFileProcessed(sessionFile.path, sessionFile.fileHash);
     return {
