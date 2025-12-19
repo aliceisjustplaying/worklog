@@ -14,6 +14,92 @@ const anthropic = createAnthropic({
 
 const MODEL = process.env.SUMMARIZER_MODEL || 'claude-haiku-4-5-20251001';
 
+/**
+ * Try to recover valid JSON from malformed Haiku responses.
+ * Haiku sometimes returns double-encoded JSON where the entire response
+ * is wrapped in a string literal with escaped quotes.
+ *
+ * Common pattern: {"shortSummary":"actual summary\",\"accomplishments\": [...rest of JSON...]"}
+ * The model puts the whole JSON inside shortSummary with escaped quotes.
+ */
+function tryRecoverMalformedResponse(error: unknown): {
+  shortSummary?: string;
+  accomplishments?: string[];
+  filesChanged?: string[];
+  toolsUsed?: string[];
+} | null {
+  try {
+    // The error object may have a 'text' property with the malformed response
+    const errorObj = error as { text?: string; cause?: { value?: unknown } };
+
+    // Try the text field first (AI_NoObjectGeneratedError)
+    let rawText = errorObj.text;
+
+    // Also try cause.value which contains the parsed (but invalid) object
+    if (!rawText && errorObj.cause?.value) {
+      const value = errorObj.cause.value as { shortSummary?: string };
+      // If shortSummary contains escaped JSON structure, extract it
+      if (value.shortSummary && value.shortSummary.includes('"accomplishments"')) {
+        rawText = value.shortSummary;
+      }
+    }
+
+    if (!rawText || typeof rawText !== 'string') return null;
+
+    // Unescape the content
+    const unescaped = rawText
+      .replace(/\\n/g, '\n')
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\');
+
+    // Pattern: the model returned JSON with shortSummary containing the rest
+    // Extract: shortSummary ends at ",\n"accomplishments" or similar
+    const summaryMatch = unescaped.match(/"shortSummary"\s*:\s*"([^"]+)"/);
+    const accomplishmentsMatch = unescaped.match(/"accomplishments"\s*:\s*\[([\s\S]*?)\]/);
+    const filesMatch = unescaped.match(/"filesChanged"\s*:\s*\[([\s\S]*?)\]/);
+    const toolsMatch = unescaped.match(/"toolsUsed"\s*:\s*\[([\s\S]*?)\]/);
+
+    if (summaryMatch) {
+      const parseArray = (match: RegExpMatchArray | null): string[] => {
+        if (!match) return [];
+        try {
+          return JSON.parse(`[${match[1]}]`);
+        } catch {
+          // Extract strings manually
+          const items: string[] = [];
+          const re = /"([^"]+)"/g;
+          let m;
+          while ((m = re.exec(match[1])) !== null) {
+            items.push(m[1]);
+          }
+          return items;
+        }
+      };
+
+      return {
+        shortSummary: summaryMatch[1],
+        accomplishments: parseArray(accomplishmentsMatch),
+        filesChanged: parseArray(filesMatch),
+        toolsUsed: parseArray(toolsMatch),
+      };
+    }
+
+    // Last resort: try to parse as complete JSON object
+    try {
+      const jsonMatch = unescaped.match(/\{[\s\S]*"shortSummary"[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.shortSummary && Array.isArray(parsed.accomplishments)) {
+          return parsed;
+        }
+      }
+    } catch {}
+  } catch {
+    // Recovery failed, will fall back to placeholder
+  }
+  return null;
+}
+
 // Zod schema for session summaries - using .describe() for better LLM understanding
 const sessionSummarySchema = z.object({
   shortSummary: z
@@ -77,9 +163,23 @@ Good: "Added dose frequency selection (frontend, backend)"`;
         ? object.toolsUsed
         : Object.keys(session.stats.toolCalls),
     };
-  } catch (error) {
-    // Haiku sometimes returns malformed output - just use fallback
+  } catch (error: unknown) {
+    // Haiku sometimes returns double-encoded JSON (valid JSON wrapped in a string)
+    // Try to recover by parsing the text field from the error
+    const recovered = tryRecoverMalformedResponse(error);
+    if (recovered) {
+      return {
+        shortSummary: recovered.shortSummary || 'Session completed',
+        accomplishments: recovered.accomplishments || [],
+        filesChanged: recovered.filesChanged || [],
+        toolsUsed: recovered.toolsUsed?.length > 0
+          ? recovered.toolsUsed
+          : Object.keys(session.stats.toolCalls),
+      };
+    }
+
     // Return a basic summary on failure
+    console.error('Summarization error (unrecoverable):', (error as Error).message);
     return {
       shortSummary: `Worked on ${session.projectName}`,
       accomplishments: ['Session details unavailable'],
