@@ -140,27 +140,18 @@ export async function generateDailyBragSummary(
     .map(([project, accs]) => `${project}: ${accs.join('; ')}`)
     .join('\n');
 
-  const systemPrompt = `Summarize a developer's daily work. Be EXTREMELY brief.
+  const systemPrompt = `Summarize a developer's daily work. Keep the 3-5 most significant items per project.
 
-FORMAT: "added [feature] ([scope])" or "fixed [thing] ([scope])"
-- Scope is just: frontend, backend, or both
-- ONE feature per project, maybe two if truly separate
+FORMAT: "feature1, feature2; fixed thing (scope)"
+- Scope: frontend, backend, or both
+- Pick the BIGGEST wins - skip minor fixes, docs, tests, refactoring
+- Consolidate related work: "3 notification fixes" → "notification handling"
 
-CONSOLIDATE aggressively:
-- "frequency UI; dose calculations; CSV updates" → "multi-dose scheduling (backend, frontend)"
-- "dark mode fixes; theme updates; color changes" → "dark mode (frontend)"
-- "tests; error handling; refactoring" → skip unless it's the ONLY work done
+Examples:
+- "date filtering, new project detection; fixed path resolution (backend, frontend)"
+- "multi-dose scheduling, CSV export (backend, frontend)"
 
-Do NOT list:
-- Tests (unless the whole session was just tests)
-- Types/refactoring
-- Documentation updates
-- Individual files or components
-
-GOOD: "added multi-dose scheduling (backend, frontend)"
-BAD: "multi-dose scheduling engine with formulation matching (backend, types), dose frequency UI..."
-
-Use exact project names. Max 10 words per project.`;
+Use exact project names. Max ~15 words per project.`;
 
   const userPrompt = `Summarize this developer's day (${date}):\n\n${projectSummaries}`;
 

@@ -132,7 +132,7 @@ export async function processCommand(options: ProcessOptions): Promise<{
   console.log(`Found ${sessions.length} session(s) to check\n`);
 
   // Process sessions in parallel with concurrency limit
-  const CONCURRENCY = 5;
+  const CONCURRENCY = 10;
   const results: Array<{
     session: SessionFile;
     result?: Awaited<ReturnType<typeof processSession>>;
