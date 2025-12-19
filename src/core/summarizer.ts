@@ -18,10 +18,10 @@ const MODEL = process.env.SUMMARIZER_MODEL || 'claude-haiku-4-5-20251001';
 const sessionSummarySchema = z.object({
   shortSummary: z
     .string()
-    .describe('1-2 sentence summary focusing on what was accomplished, built, or fixed'),
+    .describe('1-2 sentence summary of what was BUILT, FIXED, or CHANGED. Never mention reading/exploring.'),
   accomplishments: z
     .array(z.string())
-    .describe('List of specific outcomes: features built, bugs fixed, problems solved'),
+    .describe('List of concrete outcomes only: features built, bugs fixed, code written. Never include exploration or research.'),
   filesChanged: z
     .array(z.string())
     .describe('List of files that were modified or created'),
@@ -39,8 +39,9 @@ export async function summarizeSession(
   const transcript = createCondensedTranscript(session);
 
   const systemPrompt = `You summarize Claude Code sessions for a worklog.
-Focus on outcomes: features built, bugs fixed, problems solved.
-If little was done (exploration/questions only), say so briefly in the summary.`;
+Focus ONLY on outcomes: features built, bugs fixed, code written, problems solved.
+Never mention exploration, reading code, or research as accomplishments - those are not work.
+If files were edited, describe what was changed and why.`;
 
   const userPrompt = `Summarize this Claude Code session:\n\n${transcript}`;
 
@@ -78,10 +79,10 @@ If little was done (exploration/questions only), say so briefly in the summary.`
 const dailySummarySchema = z.object({
   projects: z
     .array(z.object({
-      name: z.string().describe('Project name'),
-      summary: z.string().describe('Very brief summary, 5-10 words max, like "fixed auth bug, added tests"'),
+      name: z.string().describe('Project name - use exactly as given'),
+      summary: z.string().describe('Very brief OUTCOMES only, 5-10 words max, like "fixed auth bug, added tests". Never mention exploration.'),
     }))
-    .describe('List of projects worked on with brief summaries'),
+    .describe('List of projects with brief outcome summaries'),
 });
 
 export type DailySummary = z.infer<typeof dailySummarySchema>;
@@ -116,8 +117,9 @@ export async function generateDailyBragSummary(
     .join('\n');
 
   const systemPrompt = `Summarize a developer's daily work by project.
-Keep each project summary VERY brief: 5-10 words max, like "debugged chart animations, mapped project structure".
-Just the key activities, no details. Comma-separated phrases, not full sentences.
+Keep each project summary VERY brief: 5-10 words max, like "fixed auth bug, added user settings".
+Focus on OUTCOMES only: what was built, fixed, or changed. Not what was read or explored.
+Comma-separated phrases, not full sentences. Use action verbs: built, fixed, added, refactored.
 IMPORTANT: Use the exact project names given - do not rename or paraphrase them.`;
 
   const userPrompt = `Summarize this developer's day (${date}):\n\n${projectSummaries}`;
