@@ -79,9 +79,9 @@ const dailySummarySchema = z.object({
   projects: z
     .array(z.object({
       name: z.string().describe('Project name'),
-      summary: z.string().describe('1-2 sentence summary of work done on this project'),
+      summary: z.string().describe('Very brief summary, 5-10 words max, like "fixed auth bug, added tests"'),
     }))
-    .describe('List of projects worked on with summaries'),
+    .describe('List of projects worked on with brief summaries'),
 });
 
 export type DailySummary = z.infer<typeof dailySummarySchema>;
@@ -116,8 +116,9 @@ export async function generateDailyBragSummary(
     .join('\n');
 
   const systemPrompt = `Summarize a developer's daily work by project.
-Be concise but specific. No hype, no buzzwords, just straightforward description.
-Combine related accomplishments per project into 1-2 sentences.`;
+Keep each project summary VERY brief: 5-10 words max, like "debugged chart animations, mapped project structure".
+Just the key activities, no details. Comma-separated phrases, not full sentences.
+IMPORTANT: Use the exact project names given - do not rename or paraphrase them.`;
 
   const userPrompt = `Summarize this developer's day (${date}):\n\n${projectSummaries}`;
 
