@@ -20,9 +20,10 @@ interface ProjectDetail {
 
 interface Props {
   project: ProjectDetail;
+  isNew?: boolean;
 }
 
-export default function ProjectCard({ project }: Props) {
+export default function ProjectCard({ project, isNew }: Props) {
   const [expanded, setExpanded] = useState(true);
 
   return (
@@ -35,8 +36,11 @@ export default function ProjectCard({ project }: Props) {
           <div className="p-1.5 bg-blue-100 text-blue-600 rounded">
             <Folder size={16} />
           </div>
-          <div>
+          <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-slate-800">{project.name}</h3>
+            {isNew && (
+              <span className="px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">NEW</span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-3 text-slate-500">

@@ -6,7 +6,7 @@ interface Props {
 }
 
 interface DailySummary {
-  projects: { name: string; summary: string }[];
+  projects: { name: string; summary: string; isNew?: boolean }[];
 }
 
 function parseSummary(summary: string): DailySummary | null {
@@ -60,7 +60,11 @@ export default function BragSummary({ summary }: Props) {
             <ul className="space-y-1.5">
               {parsed.projects.map((project, i) => (
                 <li key={i} className="text-sm">
-                  <span className="font-semibold text-slate-800">{project.name}:</span>{' '}
+                  <span className="font-semibold text-slate-800">{project.name}</span>
+                  {project.isNew && (
+                    <span className="ml-1.5 px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">NEW</span>
+                  )}
+                  <span className="text-slate-800">:</span>{' '}
                   <span className="text-slate-600">{project.summary}</span>
                 </li>
               ))}
