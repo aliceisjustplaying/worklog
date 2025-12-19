@@ -71,8 +71,16 @@ export function decodeProjectFolder(folderName: string): { path: string; name: s
 
   // Fallback: just the folder name with leading dash removed, last segment as name
   const parts = withoutLeading.split('-');
+  const path = '/' + withoutLeading.replace(/-/g, '/');
+
+  // Special case: home directory should show as "~"
+  const homeDir = homedir();
+  if (path === homeDir) {
+    return { path, name: '~' };
+  }
+
   return {
-    path: '/' + withoutLeading.replace(/-/g, '/'),
+    path,
     name: parts[parts.length - 1] || 'unknown',
   };
 }
