@@ -1,5 +1,6 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { generateText } from 'ai';
+import { generateObject, generateText } from 'ai';
+import { z } from 'zod';
 import type { ParsedSession, SessionSummary, DBSessionSummary } from '../types';
 import { createCondensedTranscript } from './session-reader';
 
@@ -13,60 +14,51 @@ const anthropic = createAnthropic({
 
 const MODEL = process.env.SUMMARIZER_MODEL || 'claude-haiku-4-5-20251001';
 
+// Zod schema for session summaries - using .describe() for better LLM understanding
+const sessionSummarySchema = z.object({
+  shortSummary: z
+    .string()
+    .describe('1-2 sentence summary focusing on what was accomplished, built, or fixed'),
+  accomplishments: z
+    .array(z.string())
+    .describe('List of specific outcomes: features built, bugs fixed, problems solved'),
+  filesChanged: z
+    .array(z.string())
+    .describe('List of files that were modified or created'),
+  toolsUsed: z
+    .array(z.string())
+    .describe('List of tools used like Edit, Bash, Read, Write, Grep'),
+});
+
 /**
- * Generate a summary for a session using Claude
+ * Generate a summary for a session using Claude with structured output
  */
 export async function summarizeSession(
   session: ParsedSession
 ): Promise<SessionSummary> {
   const transcript = createCondensedTranscript(session);
 
-  const systemPrompt = `You are summarizing a Claude Code coding session for a daily worklog.
-Focus on: what was accomplished, problems solved, features built or bugs fixed.
-Be concise but specific about the actual work done.
-
-Output valid JSON with this exact structure:
-{
-  "shortSummary": "1-2 sentence summary of what was accomplished",
-  "accomplishments": ["bullet point 1", "bullet point 2", ...],
-  "filesChanged": ["file1.ts", "file2.ts", ...],
-  "toolsUsed": ["Bash", "Edit", ...]
-}
-
-Keep accomplishments focused on outcomes, not process. If very little was done (just exploration or questions), say so briefly.`;
+  const systemPrompt = `You summarize Claude Code sessions for a worklog.
+Focus on outcomes: features built, bugs fixed, problems solved.
+If little was done (exploration/questions only), say so briefly in the summary.`;
 
   const userPrompt = `Summarize this Claude Code session:\n\n${transcript}`;
 
   try {
-    const { text } = await generateText({
+    const { object } = await generateObject({
       model: anthropic(MODEL),
+      schema: sessionSummarySchema,
       system: systemPrompt,
       prompt: userPrompt,
       maxTokens: 1024,
     });
 
-    // Parse JSON from response (handle markdown code blocks)
-    const jsonMatch = text.match(/```json\n?([\s\S]*?)\n?```/) ||
-      text.match(/\{[\s\S]*\}/);
-
-    if (!jsonMatch) {
-      throw new Error('No JSON found in response');
-    }
-
-    const jsonStr = jsonMatch[1] || jsonMatch[0];
-    const summary = JSON.parse(jsonStr) as SessionSummary;
-
-    // Validate and provide defaults
     return {
-      shortSummary: summary.shortSummary || 'Session completed',
-      accomplishments: Array.isArray(summary.accomplishments)
-        ? summary.accomplishments
-        : [],
-      filesChanged: Array.isArray(summary.filesChanged)
-        ? summary.filesChanged
-        : [],
-      toolsUsed: Array.isArray(summary.toolsUsed)
-        ? summary.toolsUsed
+      shortSummary: object.shortSummary || 'Session completed',
+      accomplishments: object.accomplishments || [],
+      filesChanged: object.filesChanged || [],
+      toolsUsed: object.toolsUsed.length > 0
+        ? object.toolsUsed
         : Object.keys(session.stats.toolCalls),
     };
   } catch (error) {
@@ -82,61 +74,71 @@ Keep accomplishments focused on outcomes, not process. If very little was done (
   }
 }
 
+// Schema for daily summary - structured for easy rendering
+const dailySummarySchema = z.object({
+  projects: z
+    .array(z.object({
+      name: z.string().describe('Project name'),
+      summary: z.string().describe('1-2 sentence summary of work done on this project'),
+    }))
+    .describe('List of projects worked on with summaries'),
+});
+
+export type DailySummary = z.infer<typeof dailySummarySchema>;
+
 /**
- * Generate a daily brag summary from multiple session summaries
+ * Generate a daily summary from multiple session summaries
+ * Returns structured data for easy rendering
  */
 export async function generateDailyBragSummary(
   date: string,
   sessions: DBSessionSummary[]
 ): Promise<string> {
   if (sessions.length === 0) {
-    return 'No sessions recorded';
+    return JSON.stringify({ projects: [] });
   }
 
-  // Collect all accomplishments
-  const allAccomplishments: string[] = [];
-  const projectNames = new Set<string>();
-
+  // Group accomplishments by project
+  const accomplishmentsByProject = new Map<string, string[]>();
   for (const session of sessions) {
-    projectNames.add(session.project_name);
-    try {
-      const accomplishments = JSON.parse(session.accomplishments || '[]');
-      allAccomplishments.push(...accomplishments);
-    } catch {
-      // Skip invalid JSON
+    const project = session.project_name;
+    if (!accomplishmentsByProject.has(project)) {
+      accomplishmentsByProject.set(project, []);
     }
+    try {
+      const acc = JSON.parse(session.accomplishments || '[]');
+      accomplishmentsByProject.get(project)!.push(...acc);
+    } catch {}
   }
 
-  const systemPrompt = `You are writing a brief, impressive summary of a developer's daily work for sharing on social media.
-Keep it short (1-3 sentences), punchy, and focused on impact.
-Don't use hashtags or emojis unless they really fit.
-Make it sound natural, not like AI-generated content.
-Focus on the most impressive or interesting accomplishments.`;
+  const projectSummaries = Array.from(accomplishmentsByProject.entries())
+    .map(([project, accs]) => `${project}: ${accs.join('; ')}`)
+    .join('\n');
 
-  const userPrompt = `Summarize this developer's day (${date}):
+  const systemPrompt = `Summarize a developer's daily work by project.
+Be concise but specific. No hype, no buzzwords, just straightforward description.
+Combine related accomplishments per project into 1-2 sentences.`;
 
-Projects worked on: ${Array.from(projectNames).join(', ')}
-Number of sessions: ${sessions.length}
-
-Accomplishments:
-${allAccomplishments.map((a) => `- ${a}`).join('\n')}
-
-Write a brief, impressive summary for social media.`;
+  const userPrompt = `Summarize this developer's day (${date}):\n\n${projectSummaries}`;
 
   try {
-    const { text } = await generateText({
+    const { object } = await generateObject({
       model: anthropic(MODEL),
+      schema: dailySummarySchema,
       system: systemPrompt,
       prompt: userPrompt,
-      maxTokens: 256,
+      maxTokens: 512,
     });
 
-    return text.trim() || 'Productive coding day!';
+    return JSON.stringify(object);
   } catch (error) {
     console.error('Brag summary error:', error);
 
     // Generate a basic summary on failure
-    const projectList = Array.from(projectNames).slice(0, 3).join(', ');
-    return `Worked on ${projectList}. ${sessions.length} coding sessions, making solid progress.`;
+    const projects = Array.from(accomplishmentsByProject.keys()).map(name => ({
+      name,
+      summary: 'Session details unavailable',
+    }));
+    return JSON.stringify({ projects });
   }
 }
