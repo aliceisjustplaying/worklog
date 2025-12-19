@@ -99,6 +99,15 @@ const dailySummarySchema = z.object({
     .describe('List of projects with brief outcome summaries including scope'),
 });
 
+// Extended schema with isNew flag (added post-LLM)
+interface DailySummaryWithNew {
+  projects: Array<{
+    name: string;
+    summary: string;
+    isNew?: boolean;
+  }>;
+}
+
 export type DailySummary = z.infer<typeof dailySummarySchema>;
 
 /**
@@ -107,7 +116,8 @@ export type DailySummary = z.infer<typeof dailySummarySchema>;
  */
 export async function generateDailyBragSummary(
   date: string,
-  sessions: DBSessionSummary[]
+  sessions: DBSessionSummary[],
+  newProjectNames: Set<string> = new Set()
 ): Promise<string> {
   if (sessions.length === 0) {
     return JSON.stringify({ projects: [] });
@@ -164,7 +174,17 @@ Use exact project names. Max 10 words per project.`;
       mode: 'tool', // Force tool use mode for reliable structured output
     });
 
-    return JSON.stringify(object);
+    // Add isNew flag to projects that are first-time appearances
+    const isNewProject = (name: string): boolean => newProjectNames.has(name);
+
+    const result: DailySummaryWithNew = {
+      projects: object.projects.map((p) => ({
+        ...p,
+        isNew: isNewProject(p.name) || undefined,
+      })),
+    };
+
+    return JSON.stringify(result);
   } catch (error) {
     console.error('Brag summary error:', (error as Error).message);
 
@@ -172,6 +192,7 @@ Use exact project names. Max 10 words per project.`;
     const projects = Array.from(accomplishmentsByProject.keys()).map(name => ({
       name,
       summary: 'Session details unavailable',
+      isNew: newProjectNames.has(name) || undefined,
     }));
     return JSON.stringify({ projects });
   }

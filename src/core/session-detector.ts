@@ -113,6 +113,14 @@ function resolveProjectPath(basePath: string, projectPart: string): string {
  *     -> git root: /Users/USERNAME/src/a/taper-calculator
  *     -> name: taper-calculator
  */
+/**
+ * Strip date prefix from project names (common in src/tries/ experiments).
+ * Pattern: "2025-12-15-todo-calendar-adhd" → "todo-calendar-adhd"
+ */
+function stripDatePrefix(name: string): string {
+  return name.replace(/^\d{4}-\d{2}-\d{2}-/, '');
+}
+
 export function decodeProjectFolder(folderName: string): { path: string; name: string } {
   // Remove leading dash
   const withoutLeading = folderName.slice(1);
@@ -122,6 +130,7 @@ export function decodeProjectFolder(folderName: string): { path: string; name: s
   const srcTriesMatch = withoutLeading.match(/^(Users-[^-]+-src-tries)-(.+)$/);
 
   let decodedPath: string;
+  let isTriesProject = false;
 
   if (srcAMatch) {
     const basePath = '/' + srcAMatch[1].replace(/-/g, '/');
@@ -131,6 +140,7 @@ export function decodeProjectFolder(folderName: string): { path: string; name: s
     const basePath = '/' + srcTriesMatch[1].replace(/-/g, '/');
     const projectPart = srcTriesMatch[2];
     decodedPath = resolveProjectPath(basePath, projectPart);
+    isTriesProject = true;
   } else {
     // Fallback: just replace all dashes with slashes
     decodedPath = '/' + withoutLeading.replace(/-/g, '/');
@@ -146,13 +156,21 @@ export function decodeProjectFolder(folderName: string): { path: string; name: s
   if (existsSync(decodedPath)) {
     const gitRoot = findGitRoot(decodedPath);
     if (gitRoot) {
-      const projectName = gitRoot.split('/').pop() || 'unknown';
+      let projectName = gitRoot.split('/').pop() || 'unknown';
+      // Strip date prefix from tries projects
+      if (isTriesProject) {
+        projectName = stripDatePrefix(projectName);
+      }
       return { path: gitRoot, name: projectName };
     }
   }
 
   // No git root found - use the decoded path as-is
-  const projectName = decodedPath.split('/').pop() || 'unknown';
+  let projectName = decodedPath.split('/').pop() || 'unknown';
+  // Strip date prefix from tries projects
+  if (isTriesProject) {
+    projectName = stripDatePrefix(projectName);
+  }
   return { path: decodedPath, name: projectName };
 }
 

@@ -23,8 +23,17 @@ The LLM prompts explicitly say "OUTCOMES only, never exploration" to prevent sum
 
 ## Gotchas
 
-- Haiku sometimes returns malformed structured output (strings instead of arrays). The code has fallback handling for this.
+- **Haiku + local proxy = malformed output**: The local API proxy impersonates Claude Code, so Haiku sees `<parameter>` tags and mimics them. Fix: use `mode: 'tool'` in `generateObject()` to force actual tool calling.
 - Kill any stale process on port 3456 before running `bun cli serve`
+- **Monorepo path detection**: Claude's path encoding is lossy (`/` → `-`), so `taper-calculator-apps-web` could mean a dashed name or nested dirs. The code probes the filesystem right-to-left to find which interpretation exists, then uses git root as canonical project.
+
+## Summary Quality
+
+Summaries should focus on **capabilities/value**, not code artifacts:
+- Good: "added multi-dose scheduling (backend, frontend)"
+- Bad: "built dose-splitter module, extended type system, created FrequencySelector"
+
+The `(backend, frontend)` scope suffix shows breadth of work without listing every file. Keep prompts aggressive about consolidation - Haiku tends toward verbosity.
 
 ## Commands
 

@@ -279,3 +279,32 @@ export function getDatesWithoutBragSummary(): string[] {
 
   return rows.map((r) => r.date);
 }
+
+/**
+ * Check if a project is new (no sessions before the given date)
+ */
+export function isNewProject(projectPath: string, beforeDate: string): boolean {
+  const database = getDb();
+  const row = database.query<{ count: number }, [string, string]>(
+    'SELECT COUNT(*) as count FROM session_summaries WHERE project_path = ? AND date < ?'
+  ).get(projectPath, beforeDate);
+
+  return (row?.count || 0) === 0;
+}
+
+/**
+ * Get all new projects for a given date (first appearance)
+ */
+export function getNewProjectsForDate(date: string): string[] {
+  const database = getDb();
+
+  // Get all projects that appear on this date
+  const projectsOnDate = database.query<{ project_path: string }, [string]>(
+    'SELECT DISTINCT project_path FROM session_summaries WHERE date = ?'
+  ).all(date);
+
+  // Filter to those with no prior sessions
+  return projectsOnDate
+    .filter((p) => isNewProject(p.project_path, date))
+    .map((p) => p.project_path);
+}

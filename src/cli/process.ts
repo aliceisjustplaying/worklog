@@ -7,6 +7,7 @@ import {
   saveDailySummary,
   getDatesWithoutBragSummary,
   getSessionsForDate,
+  getNewProjectsForDate,
 } from '../core/db';
 
 interface ProcessOptions {
@@ -337,11 +338,22 @@ async function generateMissingBragSummaries(verbose: boolean): Promise<void> {
       const sessions = getSessionsForDate(date);
       if (sessions.length === 0) continue;
 
+      // Find which projects are new (first appearance on this date)
+      const newProjectPaths = getNewProjectsForDate(date);
+      const newProjectNames = new Set(
+        sessions
+          .filter((s) => newProjectPaths.includes(s.project_path))
+          .map((s) => s.project_name)
+      );
+
       if (verbose) {
         console.log(`  Generating brag summary for ${date} (${sessions.length} sessions)`);
+        if (newProjectNames.size > 0) {
+          console.log(`    New projects: ${[...newProjectNames].join(', ')}`);
+        }
       }
 
-      const bragSummary = await generateDailyBragSummary(date, sessions);
+      const bragSummary = await generateDailyBragSummary(date, sessions, newProjectNames);
       const projectNames = [...new Set(sessions.map((s) => s.project_name))];
 
       saveDailySummary(date, bragSummary, projectNames, sessions.length);
