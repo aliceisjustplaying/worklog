@@ -18,10 +18,10 @@ const MODEL = process.env.SUMMARIZER_MODEL || 'claude-haiku-4-5-20251001';
 const sessionSummarySchema = z.object({
   shortSummary: z
     .string()
-    .describe('1-2 sentence summary of what was BUILT, FIXED, or CHANGED. Never mention reading/exploring.'),
+    .describe('1-2 sentence summary focusing on capabilities/value, not code artifacts. What can users do now? What problem was solved?'),
   accomplishments: z
     .array(z.string())
-    .describe('List of concrete outcomes only: features built, bugs fixed, code written. Never include exploration or research.'),
+    .describe('List of outcomes framed as capabilities or value. Never list modules/types/components as accomplishments.'),
   filesChanged: z
     .array(z.string())
     .describe('List of files that were modified or created'),
@@ -38,10 +38,24 @@ export async function summarizeSession(
 ): Promise<SessionSummary> {
   const transcript = createCondensedTranscript(session);
 
-  const systemPrompt = `You summarize Claude Code sessions for a worklog.
-Focus ONLY on outcomes: features built, bugs fixed, code written, problems solved.
-Never mention exploration, reading code, or research as accomplishments - those are not work.
-If files were edited, describe what was changed and why.`;
+  const systemPrompt = `Summarize this Claude Code session for a worklog. Be concise.
+
+The transcript shows SCOPE (frontend/backend). Include it in parentheses.
+
+FORMAT: "[Action] [capability] ([scope])"
+Examples:
+- "Added multi-dose scheduling (backend, frontend)"
+- "Fixed dark mode styling (frontend)"
+- "Implemented HealthKit sync (backend, frontend)"
+
+Rules:
+- ONE main accomplishment, maybe two if truly separate work
+- Use action verbs: added, fixed, implemented, built
+- Never list code artifacts (modules, types, components)
+- Describe what users can DO, not what code exists
+
+Bad: "Created FrequencySelector component, extended type system, updated CSV export"
+Good: "Added dose frequency selection (frontend, backend)"`;
 
   const userPrompt = `Summarize this Claude Code session:\n\n${transcript}`;
 
@@ -52,6 +66,7 @@ If files were edited, describe what was changed and why.`;
       system: systemPrompt,
       prompt: userPrompt,
       maxTokens: 1024,
+      mode: 'tool', // Force tool use mode for reliable structured output
     });
 
     return {
@@ -63,8 +78,7 @@ If files were edited, describe what was changed and why.`;
         : Object.keys(session.stats.toolCalls),
     };
   } catch (error) {
-    console.error('Summarization error:', error);
-
+    // Haiku sometimes returns malformed output - just use fallback
     // Return a basic summary on failure
     return {
       shortSummary: `Worked on ${session.projectName}`,
@@ -80,9 +94,9 @@ const dailySummarySchema = z.object({
   projects: z
     .array(z.object({
       name: z.string().describe('Project name - use exactly as given'),
-      summary: z.string().describe('Very brief OUTCOMES only, 5-10 words max, like "fixed auth bug, added tests". Never mention exploration.'),
+      summary: z.string().describe('Brief capabilities with scope, like "multi-dose scheduling (backend, frontend), dark mode (frontend)"'),
     }))
-    .describe('List of projects with brief outcome summaries'),
+    .describe('List of projects with brief outcome summaries including scope'),
 });
 
 export type DailySummary = z.infer<typeof dailySummarySchema>;
@@ -116,11 +130,27 @@ export async function generateDailyBragSummary(
     .map(([project, accs]) => `${project}: ${accs.join('; ')}`)
     .join('\n');
 
-  const systemPrompt = `Summarize a developer's daily work by project.
-Keep each project summary VERY brief: 5-10 words max, like "fixed auth bug, added user settings".
-Focus on OUTCOMES only: what was built, fixed, or changed. Not what was read or explored.
-Comma-separated phrases, not full sentences. Use action verbs: built, fixed, added, refactored.
-IMPORTANT: Use the exact project names given - do not rename or paraphrase them.`;
+  const systemPrompt = `Summarize a developer's daily work. Be EXTREMELY brief.
+
+FORMAT: "added [feature] ([scope])" or "fixed [thing] ([scope])"
+- Scope is just: frontend, backend, or both
+- ONE feature per project, maybe two if truly separate
+
+CONSOLIDATE aggressively:
+- "frequency UI; dose calculations; CSV updates" → "multi-dose scheduling (backend, frontend)"
+- "dark mode fixes; theme updates; color changes" → "dark mode (frontend)"
+- "tests; error handling; refactoring" → skip unless it's the ONLY work done
+
+Do NOT list:
+- Tests (unless the whole session was just tests)
+- Types/refactoring
+- Documentation updates
+- Individual files or components
+
+GOOD: "added multi-dose scheduling (backend, frontend)"
+BAD: "multi-dose scheduling engine with formulation matching (backend, types), dose frequency UI..."
+
+Use exact project names. Max 10 words per project.`;
 
   const userPrompt = `Summarize this developer's day (${date}):\n\n${projectSummaries}`;
 
@@ -131,11 +161,12 @@ IMPORTANT: Use the exact project names given - do not rename or paraphrase them.
       system: systemPrompt,
       prompt: userPrompt,
       maxTokens: 512,
+      mode: 'tool', // Force tool use mode for reliable structured output
     });
 
     return JSON.stringify(object);
   } catch (error) {
-    console.error('Brag summary error:', error);
+    console.error('Brag summary error:', (error as Error).message);
 
     // Generate a basic summary on failure
     const projects = Array.from(accomplishmentsByProject.keys()).map(name => ({
