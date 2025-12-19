@@ -3,8 +3,9 @@
 Automatically generates a daily worklog from your Claude Code sessions. See what you actually accomplished, not what you looked at.
 
 <p>
-  <img src="screenshot1.png" width="49%" />
-  <img src="screenshot2.png" width="49%" />
+  <img src="screenshot1.png" width="32%" />
+  <img src="screenshot2.png" width="32%" />
+  <img src="screenshot3.png" width="32%" />
 </p>
 
 ## What it does
