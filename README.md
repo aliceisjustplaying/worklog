@@ -56,6 +56,8 @@ bun cli regenerate --force   # Regenerate all daily summaries
 
 **Summarization**: Each session is summarized focusing on outcomes - what was built, fixed, or changed. The daily summary rolls up all sessions by project into brief phrases.
 
+**Day boundary**: Days end at 3am, not midnight. Work done before 3am counts toward the previous day (aligns with typical sleep schedules). To change this, edit `getEffectiveDate()` in `src/core/session-reader.ts`.
+
 **Storage**: Processed data is stored in `data/worklog.db` (SQLite).
 
 ## Development
