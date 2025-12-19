@@ -130,7 +130,31 @@ export async function processCommand(options: ProcessOptions): Promise<{
 
   console.log(`Found ${sessions.length} session(s) to check\n`);
 
-  // Group by project for display
+  // Process sessions in parallel with concurrency limit
+  const CONCURRENCY = 5;
+  const results: Array<{
+    session: SessionFile;
+    result?: Awaited<ReturnType<typeof processSession>>;
+    error?: unknown;
+  }> = [];
+
+  // Process in batches
+  for (let i = 0; i < sessions.length; i += CONCURRENCY) {
+    const batch = sessions.slice(i, i + CONCURRENCY);
+    const batchResults = await Promise.all(
+      batch.map(async (session) => {
+        try {
+          const result = await processSession(session, verbose, dateFilter);
+          return { session, result };
+        } catch (error) {
+          return { session, error };
+        }
+      })
+    );
+    results.push(...batchResults);
+  }
+
+  // Group results by project for display
   const byProject = groupByProject(sessions);
   let processed = 0;
   let errors = 0;
@@ -141,39 +165,45 @@ export async function processCommand(options: ProcessOptions): Promise<{
 
     let skipped = 0;
     let filtered = 0;
+
     for (const session of projectSessions) {
-      try {
-        const result = await processSession(session, verbose, dateFilter);
+      const resultEntry = results.find((r) => r.session === session);
+      if (!resultEntry) continue;
 
-        if (result.filtered) {
-          filtered++;
-          continue;
-        }
-
-        if (result.skipped) {
-          skipped++;
-          if (verbose) {
-            console.log(`  ⊘ ${session.sessionId.slice(0, 8)}... (skipped - no work)`);
-          }
-          continue;
-        }
-
-        if (result.date) {
-          datesProcessed.add(result.date);
-        }
-        processed++;
-
-        const duration = formatDuration(result.startTime, result.endTime);
-        const summary = result.summary.slice(0, 60);
-        console.log(`  ✓ ${session.sessionId.slice(0, 8)}... (${duration}) → "${summary}..."`);
-      } catch (error) {
+      if (resultEntry.error) {
         errors++;
-        console.log(`  ✗ ${session.sessionId.slice(0, 8)}... - Error: ${error}`);
+        console.log(`  ✗ ${session.sessionId.slice(0, 8)}... - Error: ${resultEntry.error}`);
         if (verbose) {
-          console.error(error);
+          console.error(resultEntry.error);
         }
+        continue;
       }
+
+      const result = resultEntry.result!;
+
+      if (result.filtered) {
+        filtered++;
+        continue;
+      }
+
+      if (result.skipped) {
+        skipped++;
+        if (verbose) {
+          console.log(`  ⊘ ${session.sessionId.slice(0, 8)}... (skipped - no work)`);
+        }
+        continue;
+      }
+
+      if (result.date) {
+        datesProcessed.add(result.date);
+      }
+      processed++;
+
+      const duration = formatDuration(result.startTime, result.endTime);
+      const summary = result.summary.slice(0, 60);
+      console.log(`  ✓ ${session.sessionId.slice(0, 8)}... (${duration}) → "${summary}..."`);
     }
+
     const notes = [];
     if (skipped > 0) notes.push(`${skipped} empty`);
     if (filtered > 0) notes.push(`${filtered} outside date range`);
