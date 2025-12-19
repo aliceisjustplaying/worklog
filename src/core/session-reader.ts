@@ -10,6 +10,16 @@ import type {
 } from '../types';
 
 /**
+ * Get the "effective date" for a timestamp using a 3am boundary.
+ * Work done before 3am counts as the previous day (aligns with sleep cycle).
+ */
+function getEffectiveDate(timestamp: string): string {
+  const d = new Date(timestamp);
+  d.setHours(d.getHours() - 3); // Shift 3am boundary to midnight
+  return d.toISOString().split('T')[0];
+}
+
+/**
  * Stream-parse a JSONL session file
  */
 export async function* parseJSONLStream(
@@ -115,8 +125,9 @@ export async function parseSessionFile(
     endTime = startTime;
   }
 
-  // Derive date from startTime
-  const date = startTime.split('T')[0];
+  // Derive date from endTime with 3am boundary (aligns with sleep cycle)
+  // Work done before 3am counts as the previous day
+  const date = getEffectiveDate(endTime);
 
   const stats: SessionStats = {
     userMessages,

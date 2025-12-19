@@ -35,6 +35,7 @@ bun cli process              # Process new sessions
 bun cli process --force      # Reprocess all sessions
 bun cli process -d today     # Process today only
 bun cli process -w thisweek  # Process this week only
+bun cli process -v           # Verbose output (show parsing details)
 bun cli status               # Show stats
 bun cli serve                # Production server on :3456
 bun cli regenerate           # Regenerate daily summaries
