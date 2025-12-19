@@ -210,6 +210,219 @@ function truncate(str: string, maxLength: number): string {
 }
 
 /**
+ * Work type classification based on files changed
+ */
+export type WorkType = 'feature' | 'infrastructure' | 'tests' | 'docs' | 'mixed';
+
+export interface WorkScope {
+  frontend: number;
+  backend: number;
+  tests: number;
+  types: number;
+  config: number;
+  docs: number;
+}
+
+export interface WorkClassification {
+  type: WorkType;
+  signals: string[]; // Human-readable explanation of why
+  scope: WorkScope;
+  scopeSummary: string; // e.g., "frontend, backend" or "tests"
+}
+
+/**
+ * Check if a file path looks like frontend code
+ */
+function isFrontend(file: string): boolean {
+  const lower = file.toLowerCase();
+  return (
+    lower.includes('/components/') ||
+    lower.includes('/pages/') ||
+    lower.includes('/screens/') ||
+    lower.includes('/views/') ||
+    lower.includes('/ui/') ||
+    lower.includes('/app/') ||
+    lower.includes('/apps/web/') ||
+    lower.includes('/web/') ||
+    lower.includes('/frontend/') ||
+    lower.includes('/client/') ||
+    lower.endsWith('.tsx') ||
+    lower.endsWith('.jsx') ||
+    lower.endsWith('.css') ||
+    lower.endsWith('.scss')
+  );
+}
+
+/**
+ * Check if a file path looks like backend code
+ */
+function isBackend(file: string): boolean {
+  const lower = file.toLowerCase();
+  return (
+    lower.includes('/api/') ||
+    lower.includes('/server/') ||
+    lower.includes('/services/') ||
+    lower.includes('/lib/') ||
+    lower.includes('/core/') ||
+    lower.includes('/packages/') ||
+    lower.includes('/backend/') ||
+    lower.includes('/handlers/') ||
+    lower.includes('/routes/') ||
+    lower.includes('/controllers/') ||
+    lower.includes('/models/') ||
+    lower.includes('/utils/') ||
+    (lower.endsWith('.ts') && !lower.endsWith('.test.ts') && !lower.endsWith('.spec.ts') && !lower.endsWith('.d.ts') && !isFrontend(file))
+  );
+}
+
+/**
+ * Classify the type of work based on file paths
+ */
+export function classifyWork(files: string[]): WorkClassification {
+  const signals: string[] = [];
+  const scope: WorkScope = {
+    frontend: 0,
+    backend: 0,
+    tests: 0,
+    types: 0,
+    config: 0,
+    docs: 0,
+  };
+
+  let featureFiles = 0;
+
+  for (const file of files) {
+    const lower = file.toLowerCase();
+    const filename = file.split('/').pop() || '';
+
+    // Tests
+    if (
+      lower.includes('.test.') ||
+      lower.includes('.spec.') ||
+      lower.includes('__tests__') ||
+      lower.includes('/test/') ||
+      lower.includes('/tests/')
+    ) {
+      scope.tests++;
+      continue;
+    }
+
+    // Types/interfaces
+    if (
+      filename === 'types.ts' ||
+      filename === 'interfaces.ts' ||
+      lower.endsWith('.d.ts') ||
+      lower.includes('/types/') ||
+      lower.includes('/interfaces/')
+    ) {
+      scope.types++;
+      continue;
+    }
+
+    // Config/devops
+    if (
+      lower.includes('.config.') ||
+      lower.includes('/config/') ||
+      lower.includes('.github/') ||
+      lower.includes('dockerfile') ||
+      lower.includes('.yml') ||
+      lower.includes('.yaml') ||
+      filename.startsWith('.') ||
+      filename === 'package.json' ||
+      filename === 'tsconfig.json'
+    ) {
+      scope.config++;
+      continue;
+    }
+
+    // Docs
+    if (
+      lower.endsWith('.md') ||
+      lower.includes('/docs/') ||
+      lower.includes('/documentation/')
+    ) {
+      scope.docs++;
+      continue;
+    }
+
+    // Feature work - classify as frontend or backend
+    featureFiles++;
+    if (isFrontend(file)) {
+      scope.frontend++;
+    } else if (isBackend(file)) {
+      scope.backend++;
+    } else {
+      // Default to backend for unclassified .ts files
+      scope.backend++;
+    }
+  }
+
+  const total = files.length;
+  if (total === 0) {
+    return {
+      type: 'mixed',
+      signals: ['no files changed'],
+      scope,
+      scopeSummary: '',
+    };
+  }
+
+  // Build scope summary - simplified to frontend/backend/both
+  let scopeSummary = '';
+  const hasFrontend = scope.frontend > 0;
+  const hasBackend = scope.backend > 0;
+  if (hasFrontend && hasBackend) {
+    scopeSummary = 'frontend, backend';
+  } else if (hasFrontend) {
+    scopeSummary = 'frontend';
+  } else if (hasBackend) {
+    scopeSummary = 'backend';
+  } else if (scope.tests > 0) {
+    scopeSummary = 'tests';
+  } else if (scope.docs > 0) {
+    scopeSummary = 'docs';
+  } else if (scope.config > 0) {
+    scopeSummary = 'config';
+  }
+
+  // Determine primary type (>50% of files)
+  const threshold = total * 0.5;
+
+  if (scope.tests > threshold) {
+    signals.push(`${scope.tests}/${total} files are tests`);
+    return { type: 'tests', signals, scope, scopeSummary };
+  }
+
+  if (scope.docs > threshold) {
+    signals.push(`${scope.docs}/${total} files are documentation`);
+    return { type: 'docs', signals, scope, scopeSummary };
+  }
+
+  if (scope.types + scope.config > threshold) {
+    if (scope.types > scope.config) {
+      signals.push(`${scope.types}/${total} files are types`);
+    } else {
+      signals.push(`${scope.config}/${total} files are config`);
+    }
+    return { type: 'infrastructure', signals, scope, scopeSummary };
+  }
+
+  if (featureFiles > threshold) {
+    signals.push(`${featureFiles}/${total} files are feature code`);
+    return { type: 'feature', signals, scope, scopeSummary };
+  }
+
+  // Mixed - build a description
+  if (featureFiles > 0) signals.push(`${featureFiles} feature`);
+  if (scope.tests > 0) signals.push(`${scope.tests} test`);
+  if (scope.types > 0) signals.push(`${scope.types} type`);
+  if (scope.config > 0) signals.push(`${scope.config} config`);
+  if (scope.docs > 0) signals.push(`${scope.docs} doc`);
+
+  return { type: 'mixed', signals, scope, scopeSummary };
+}
+
+/**
  * Create a condensed transcript for LLM summarization
  * Leads with action summary (files changed) to ensure implementation work is captured
  */
@@ -250,6 +463,15 @@ export function createCondensedTranscript(session: ParsedSession): string {
       }
     }
   }
+
+  // Classify the work based on file paths
+  const allFiles = [...filesWritten, ...filesEdited];
+  const classification = classifyWork(allFiles);
+  parts.push(`WORK TYPE: ${classification.type}`);
+  if (classification.scopeSummary) {
+    parts.push(`SCOPE: ${classification.scopeSummary}`);
+  }
+  parts.push('');
 
   // Show action summary at the TOP
   if (filesWritten.length > 0) {
