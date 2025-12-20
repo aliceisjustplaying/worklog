@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
-import { Folder, Ship, Construction, Archive, Beaker, Zap, Clock, ChevronDown } from 'lucide-react';
+import { Folder, Ship, Construction, Archive, Beaker, Zap, Clock, ChevronDown, Rocket, EyeOff } from 'lucide-react';
 import { useProjects, useUpdateProjectStatus } from '../hooks/useProjects';
 import type { ProjectStatus, ProjectListItem } from '../../../types';
 
 const STATUS_CONFIG: Record<ProjectStatus, { icon: React.ElementType; color: string; bgColor: string; label: string }> = {
   shipped: { icon: Ship, color: 'text-green-600', bgColor: 'bg-green-50', label: 'Shipped' },
   in_progress: { icon: Construction, color: 'text-blue-600', bgColor: 'bg-blue-50', label: 'In Progress' },
+  ready_to_ship: { icon: Rocket, color: 'text-teal-600', bgColor: 'bg-teal-50', label: 'Ready to Ship' },
   abandoned: { icon: Archive, color: 'text-gray-500', bgColor: 'bg-gray-100', label: 'Abandoned' },
+  ignore: { icon: EyeOff, color: 'text-slate-400', bgColor: 'bg-slate-100', label: 'Ignore' },
   one_off: { icon: Zap, color: 'text-amber-600', bgColor: 'bg-amber-50', label: 'One-off' },
   experiment: { icon: Beaker, color: 'text-purple-600', bgColor: 'bg-purple-50', label: 'Experiment' },
 };
 
-const ALL_STATUSES: ProjectStatus[] = ['shipped', 'in_progress', 'abandoned', 'one_off', 'experiment'];
+const ALL_STATUSES: ProjectStatus[] = ['shipped', 'in_progress', 'ready_to_ship', 'abandoned', 'ignore', 'one_off', 'experiment'];
 
 function StatusBadge({
   status,
@@ -166,7 +168,7 @@ export default function ProjectList() {
       </div>
 
       {/* Stale projects callout */}
-      {staleCount > 0 && filter !== 'shipped' && filter !== 'abandoned' && filter !== 'one_off' && filter !== 'experiment' && (
+      {staleCount > 0 && filter !== 'shipped' && filter !== 'ready_to_ship' && filter !== 'abandoned' && filter !== 'ignore' && filter !== 'one_off' && filter !== 'experiment' && (
         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
           <strong>{staleCount} project{staleCount > 1 ? 's' : ''}</strong> marked "In Progress" but untouched for 30+ days.
         </div>
