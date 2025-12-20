@@ -1,18 +1,18 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { generateObject, generateText } from 'ai';
+import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { ParsedSession, SessionSummary, DBSessionSummary } from '../types';
 import { createCondensedTranscript } from './session-reader';
 
 const anthropic = createAnthropic({
   apiKey: process.env.WORKLOG_API_KEY,
-  ...(process.env.WORKLOG_BASE_URL && { baseURL: process.env.WORKLOG_BASE_URL }),
+  ...(process.env.WORKLOG_BASE_URL !== undefined && process.env.WORKLOG_BASE_URL.length > 0 && { baseURL: process.env.WORKLOG_BASE_URL }),
   headers: {
     'Accept-Encoding': 'identity',
   },
 });
 
-const MODEL = process.env.SUMMARIZER_MODEL || 'claude-haiku-4-5-20251001';
+const MODEL = process.env.SUMMARIZER_MODEL ?? 'claude-haiku-4-5-20251001';
 
 /**
  * Try to recover valid JSON from malformed Haiku responses.
@@ -36,15 +36,15 @@ function tryRecoverMalformedResponse(error: unknown): {
     let rawText = errorObj.text;
 
     // Also try cause.value which contains the parsed (but invalid) object
-    if (!rawText && errorObj.cause?.value) {
+    if (rawText === undefined && errorObj.cause?.value !== undefined) {
       const value = errorObj.cause.value as { shortSummary?: string };
       // If shortSummary contains escaped JSON structure, extract it
-      if (value.shortSummary && value.shortSummary.includes('"accomplishments"')) {
+      if (value.shortSummary?.includes('"accomplishments"') === true) {
         rawText = value.shortSummary;
       }
     }
 
-    if (!rawText || typeof rawText !== 'string') return null;
+    if (rawText === undefined || typeof rawText !== 'string') return null;
 
     // Unescape the content
     const unescaped = rawText
@@ -54,16 +54,20 @@ function tryRecoverMalformedResponse(error: unknown): {
 
     // Pattern: the model returned JSON with shortSummary containing the rest
     // Extract: shortSummary ends at ",\n"accomplishments" or similar
-    const summaryMatch = unescaped.match(/"shortSummary"\s*:\s*"([^"]+)"/);
-    const accomplishmentsMatch = unescaped.match(/"accomplishments"\s*:\s*\[([\s\S]*?)\]/);
-    const filesMatch = unescaped.match(/"filesChanged"\s*:\s*\[([\s\S]*?)\]/);
-    const toolsMatch = unescaped.match(/"toolsUsed"\s*:\s*\[([\s\S]*?)\]/);
+    const summaryMatch = /"shortSummary"\s*:\s*"([^"]+)"/.exec(unescaped);
+    const accomplishmentsMatch = /"accomplishments"\s*:\s*\[([\s\S]*?)\]/.exec(unescaped);
+    const filesMatch = /"filesChanged"\s*:\s*\[([\s\S]*?)\]/.exec(unescaped);
+    const toolsMatch = /"toolsUsed"\s*:\s*\[([\s\S]*?)\]/.exec(unescaped);
 
-    if (summaryMatch) {
+    if (summaryMatch !== null) {
       const parseArray = (match: RegExpMatchArray | null): string[] => {
-        if (!match) return [];
+        if (match === null) return [];
         try {
-          return JSON.parse(`[${match[1]}]`);
+          const parsed: unknown = JSON.parse(`[${match[1]}]`);
+          if (Array.isArray(parsed)) {
+            return parsed.filter((item): item is string => typeof item === 'string');
+          }
+          return [];
         } catch {
           // Extract strings manually
           const items: string[] = [];
@@ -86,14 +90,28 @@ function tryRecoverMalformedResponse(error: unknown): {
 
     // Last resort: try to parse as complete JSON object
     try {
-      const jsonMatch = unescaped.match(/\{[\s\S]*"shortSummary"[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed.shortSummary && Array.isArray(parsed.accomplishments)) {
-          return parsed;
+      const jsonMatch = /\{[\s\S]*"shortSummary"[\s\S]*\}/.exec(unescaped);
+      if (jsonMatch !== null) {
+        const parsed: unknown = JSON.parse(jsonMatch[0]);
+        if (
+          typeof parsed === 'object' &&
+          parsed !== null &&
+          'shortSummary' in parsed &&
+          'accomplishments' in parsed &&
+          typeof parsed.shortSummary === 'string' &&
+          Array.isArray(parsed.accomplishments)
+        ) {
+          return parsed as {
+            shortSummary: string;
+            accomplishments: string[];
+            filesChanged?: string[];
+            toolsUsed?: string[];
+          };
         }
       }
-    } catch {}
+    } catch {
+      // Failed to parse as complete JSON, continue to outer catch
+    }
   } catch {
     // Recovery failed, will fall back to placeholder
   }
@@ -151,14 +169,12 @@ Good: "Added dose frequency selection (frontend, backend)"`;
       schema: sessionSummarySchema,
       system: systemPrompt,
       prompt: userPrompt,
-      maxTokens: 1024,
-      mode: 'tool', // Force tool use mode for reliable structured output
     });
 
     return {
-      shortSummary: object.shortSummary || 'Session completed',
-      accomplishments: object.accomplishments || [],
-      filesChanged: object.filesChanged || [],
+      shortSummary: object.shortSummary,
+      accomplishments: object.accomplishments,
+      filesChanged: object.filesChanged,
       toolsUsed: object.toolsUsed.length > 0
         ? object.toolsUsed
         : Object.keys(session.stats.toolCalls),
@@ -167,13 +183,13 @@ Good: "Added dose frequency selection (frontend, backend)"`;
     // Haiku sometimes returns double-encoded JSON (valid JSON wrapped in a string)
     // Try to recover by parsing the text field from the error
     const recovered = tryRecoverMalformedResponse(error);
-    if (recovered) {
+    if (recovered !== null) {
       return {
-        shortSummary: recovered.shortSummary || 'Session completed',
-        accomplishments: recovered.accomplishments || [],
-        filesChanged: recovered.filesChanged || [],
-        toolsUsed: recovered.toolsUsed?.length > 0
-          ? recovered.toolsUsed
+        shortSummary: recovered.shortSummary ?? 'Session completed',
+        accomplishments: recovered.accomplishments ?? [],
+        filesChanged: recovered.filesChanged ?? [],
+        toolsUsed: (recovered.toolsUsed?.length ?? 0) > 0
+          ? recovered.toolsUsed ?? []
           : Object.keys(session.stats.toolCalls),
       };
     }
@@ -201,11 +217,11 @@ const dailySummarySchema = z.object({
 
 // Extended schema with isNew flag (added post-LLM)
 interface DailySummaryWithNew {
-  projects: Array<{
+  projects: {
     name: string;
     summary: string;
     isNew?: boolean;
-  }>;
+  }[];
 }
 
 export type DailySummary = z.infer<typeof dailySummarySchema>;
@@ -217,7 +233,7 @@ export type DailySummary = z.infer<typeof dailySummarySchema>;
 export async function generateDailyBragSummary(
   date: string,
   sessions: DBSessionSummary[],
-  newProjectNames: Set<string> = new Set()
+  newProjectNames = new Set<string>()
 ): Promise<string> {
   if (sessions.length === 0) {
     return JSON.stringify({ projects: [] });
@@ -226,14 +242,24 @@ export async function generateDailyBragSummary(
   // Group accomplishments by project
   const accomplishmentsByProject = new Map<string, string[]>();
   for (const session of sessions) {
-    const project = session.project_name;
+    const project = session.project_name ?? 'Unknown';
     if (!accomplishmentsByProject.has(project)) {
       accomplishmentsByProject.set(project, []);
     }
-    try {
-      const acc = JSON.parse(session.accomplishments || '[]');
-      accomplishmentsByProject.get(project)!.push(...acc);
-    } catch {}
+    if (session.accomplishments !== null) {
+      try {
+        const parsed: unknown = JSON.parse(session.accomplishments);
+        if (Array.isArray(parsed)) {
+          const stringItems = parsed.filter((item): item is string => typeof item === 'string');
+          const existing = accomplishmentsByProject.get(project);
+          if (existing !== undefined) {
+            existing.push(...stringItems);
+          }
+        }
+      } catch {
+        // Failed to parse accomplishments, skip this session
+      }
+    }
   }
 
   const projectSummaries = Array.from(accomplishmentsByProject.entries())
@@ -261,8 +287,6 @@ Use exact project names. Max ~15 words per project.`;
       schema: dailySummarySchema,
       system: systemPrompt,
       prompt: userPrompt,
-      maxTokens: 512,
-      mode: 'tool', // Force tool use mode for reliable structured output
     });
 
     // Add isNew flag to projects that are first-time appearances
@@ -271,7 +295,7 @@ Use exact project names. Max ~15 words per project.`;
     const result: DailySummaryWithNew = {
       projects: object.projects.map((p) => ({
         ...p,
-        isNew: isNewProject(p.name) || undefined,
+        isNew: isNewProject(p.name) ? true : undefined,
       })),
     };
 
@@ -283,7 +307,7 @@ Use exact project names. Max ~15 words per project.`;
     const projects = Array.from(accomplishmentsByProject.keys()).map(name => ({
       name,
       summary: 'Session details unavailable',
-      isNew: newProjectNames.has(name) || undefined,
+      isNew: newProjectNames.has(name) ? true : undefined,
     }));
     return JSON.stringify({ projects });
   }

@@ -72,9 +72,9 @@ function resolveFullPath(encodedPath: string, sessionFilePath?: string): string 
   }
 
   // Filesystem probing failed - try reading cwd from session file
-  if (sessionFilePath && existsSync(sessionFilePath)) {
+  if (sessionFilePath !== undefined && existsSync(sessionFilePath)) {
     const cwd = extractCwdFromSessionFile(sessionFilePath);
-    if (cwd) {
+    if (cwd !== null) {
       return cwd;
     }
   }
@@ -93,13 +93,22 @@ function extractCwdFromSessionFile(filePath: string): string | null {
     for (const line of lines) {
       if (!line.trim()) continue;
       try {
-        const entry = JSON.parse(line);
-        if (entry.cwd && typeof entry.cwd === 'string') {
+        const entry: unknown = JSON.parse(line);
+        if (
+          typeof entry === 'object' &&
+          entry !== null &&
+          'cwd' in entry &&
+          typeof entry.cwd === 'string'
+        ) {
           return entry.cwd;
         }
-      } catch {}
+      } catch {
+        // Ignore malformed JSON lines
+      }
     }
-  } catch {}
+  } catch {
+    // Ignore file read errors
+  }
   return null;
 }
 
@@ -183,8 +192,8 @@ export function decodeProjectFolder(
   const withoutLeading = folderName.slice(1);
 
   // Find the src/a/ or src/tries/ marker
-  const srcAMatch = withoutLeading.match(/^(Users-[^-]+-src-a)-(.+)$/);
-  const srcTriesMatch = withoutLeading.match(/^(Users-[^-]+-src-tries)-(.+)$/);
+  const srcAMatch = /^(Users-[^-]+-src-a)-(.+)$/.exec(withoutLeading);
+  const srcTriesMatch = /^(Users-[^-]+-src-tries)-(.+)$/.exec(withoutLeading);
 
   let decodedPath: string;
   let isTriesProject = false;
@@ -217,8 +226,8 @@ export function decodeProjectFolder(
   // Try to find git root to normalize monorepo subdirectories
   if (existsSync(decodedPath)) {
     const gitRoot = findGitRoot(decodedPath);
-    if (gitRoot) {
-      let projectName = gitRoot.split('/').pop() || 'unknown';
+    if (gitRoot !== null) {
+      let projectName = gitRoot.split('/').pop() ?? 'unknown';
       // Strip date prefix from tries projects
       if (isTriesProject) {
         projectName = stripDatePrefix(projectName);
@@ -228,7 +237,7 @@ export function decodeProjectFolder(
   }
 
   // No git root found - use the decoded path as-is
-  let projectName = decodedPath.split('/').pop() || 'unknown';
+  let projectName = decodedPath.split('/').pop() ?? 'unknown';
   // Strip date prefix from tries projects
   if (isTriesProject) {
     projectName = stripDatePrefix(projectName);
@@ -247,14 +256,15 @@ export function decodeProjectPath(folderName: string): string {
  * @deprecated Use decodeProjectFolder instead
  */
 export function getProjectName(projectPath: string): string {
-  return projectPath.split('/').filter(Boolean).pop() || 'unknown';
+  return projectPath.split('/').filter(Boolean).pop() ?? 'unknown';
 }
 
 /**
  * Calculate MD5 hash of a file
  */
-export function getFileHash(filePath: string): string {
-  const content = Bun.file(filePath).toString();
+export async function getFileHash(filePath: string): Promise<string> {
+  const file = Bun.file(filePath);
+  const content = await file.text();
   return createHash('md5').update(content).digest('hex');
 }
 
@@ -352,7 +362,7 @@ async function computeFileHash(filePath: string): Promise<string> {
  */
 export function filterSessionsByDate(
   sessions: SessionFile[],
-  targetDate: string
+  _targetDate: string
 ): SessionFile[] {
   // We need to peek into files to check dates, but that's expensive
   // For now, return all and let the processor filter

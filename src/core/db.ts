@@ -1,11 +1,10 @@
 import { Database } from 'bun:sqlite';
-import { join, dirname } from 'path';
+import { join } from 'path';
 import { mkdirSync, existsSync } from 'fs';
 import type {
   DBSessionSummary,
   DBDailySummary,
   DBProcessedFile,
-  DBProject,
   SessionSummary,
   ParsedSession,
   SessionStats,
@@ -35,9 +34,12 @@ export function getDb(): Database {
 }
 
 function initSchema() {
-  const database = db!;
+  const database = db;
+  if (!database) {
+    throw new Error('Database not initialized');
+  }
 
-  database.exec(`
+  database.run(`
     CREATE TABLE IF NOT EXISTS session_summaries (
       id INTEGER PRIMARY KEY,
       session_id TEXT UNIQUE NOT NULL,
@@ -98,7 +100,10 @@ function initSchema() {
  * Run database migrations
  */
 function runMigrations(): void {
-  const database = db!;
+  const database = db;
+  if (!database) {
+    throw new Error('Database not initialized');
+  }
 
   // Check if source column exists
   const columns = database
@@ -109,7 +114,7 @@ function runMigrations(): void {
 
   if (!hasSourceColumn) {
     console.log('Migration: Adding source column to session_summaries...');
-    database.exec(`
+    database.run(`
       ALTER TABLE session_summaries ADD COLUMN source TEXT DEFAULT 'claude';
     `);
     console.log('Migration complete.');
@@ -238,28 +243,28 @@ export function getDayDetail(date: string): DayDetail | null {
   let totalTokens = 0;
 
   for (const session of sessions) {
-    const stats: SessionStats = JSON.parse(session.stats || '{}');
-    totalTokens += (stats.totalInputTokens || 0) + (stats.totalOutputTokens || 0);
+    const stats = JSON.parse(session.stats ?? '{}') as SessionStats;
+    totalTokens += (stats.totalInputTokens ?? 0) + (stats.totalOutputTokens ?? 0);
 
     const sessionDetail: SessionDetail = {
       sessionId: session.session_id,
       startTime: session.start_time,
       endTime: session.end_time,
-      shortSummary: session.short_summary,
-      accomplishments: JSON.parse(session.accomplishments || '[]'),
-      filesChanged: JSON.parse(session.files_changed || '[]'),
-      toolsUsed: JSON.parse(session.tools_used || '[]'),
+      shortSummary: session.short_summary ?? '',
+      accomplishments: JSON.parse(session.accomplishments ?? '[]') as string[],
+      filesChanged: JSON.parse(session.files_changed ?? '[]') as string[],
+      toolsUsed: JSON.parse(session.tools_used ?? '[]') as string[],
       stats,
     };
 
-    const existing = projectMap.get(session.project_path) || [];
+    const existing = projectMap.get(session.project_path) ?? [];
     existing.push(sessionDetail);
     projectMap.set(session.project_path, existing);
   }
 
   const projects: ProjectDetail[] = Array.from(projectMap.entries()).map(
     ([path, sessions]) => ({
-      name: sessions[0]?.sessionId ? path.split('/').pop() || path : path,
+      name: sessions[0]?.sessionId ? path.split('/').pop() ?? path : path,
       path,
       sessions,
     })
@@ -268,7 +273,7 @@ export function getDayDetail(date: string): DayDetail | null {
   // Get project name from first session
   for (const project of projects) {
     const firstSession = sessions.find((s) => s.project_path === project.path);
-    if (firstSession?.project_name) {
+    if (firstSession !== undefined && firstSession.project_name !== null && firstSession.project_name !== '') {
       project.name = firstSession.project_name;
     }
   }
@@ -302,9 +307,9 @@ export function getStats(): {
   `).get();
 
   return {
-    totalSessions: stats?.total_sessions || 0,
-    totalDays: stats?.total_days || 0,
-    totalProjects: stats?.total_projects || 0,
+    totalSessions: stats?.total_sessions ?? 0,
+    totalDays: stats?.total_days ?? 0,
+    totalProjects: stats?.total_projects ?? 0,
   };
 }
 
@@ -337,7 +342,7 @@ export function isNewProject(projectPath: string, beforeDate: string): boolean {
     'SELECT COUNT(*) as count FROM session_summaries WHERE project_path = ? AND date < ?'
   ).get(projectPath, beforeDate);
 
-  return (row?.count || 0) === 0;
+  return (row?.count ?? 0) === 0;
 }
 
 /**
@@ -363,20 +368,23 @@ export function getNewProjectsForDate(date: string): string[] {
  * Backfill projects table from existing session data (one-time migration)
  */
 function backfillProjectsIfNeeded(): void {
-  const database = db!;
+  const database = db;
+  if (!database) {
+    throw new Error('Database not initialized');
+  }
 
   // Check if projects table is empty but sessions exist
   const projectCount =
     database
       .query<{ count: number }, []>('SELECT COUNT(*) as count FROM projects')
-      .get()?.count || 0;
+      .get()?.count ?? 0;
 
   const sessionCount =
     database
       .query<{ count: number }, []>(
         'SELECT COUNT(*) as count FROM session_summaries'
       )
-      .get()?.count || 0;
+      .get()?.count ?? 0;
 
   if (projectCount === 0 && sessionCount > 0) {
     console.log('Backfilling projects table from session data...');
@@ -407,8 +415,8 @@ function backfillProjectsIfNeeded(): void {
     const filled =
       database
         .query<{ count: number }, []>('SELECT COUNT(*) as count FROM projects')
-        .get()?.count || 0;
-    console.log(`Created ${filled} project records.`);
+        .get()?.count ?? 0;
+    console.log(`Created ${String(filled)} project records.`);
   }
 }
 
@@ -480,7 +488,7 @@ export function getProjects(status?: ProjectStatus): ProjectListItem[] {
         first_session_date: string;
         last_session_date: string;
         total_sessions: number;
-        days_since_last: number;
+        days_since_last: number | null;
       },
       string[]
     >(query)
@@ -493,7 +501,7 @@ export function getProjects(status?: ProjectStatus): ProjectListItem[] {
     firstSessionDate: row.first_session_date,
     lastSessionDate: row.last_session_date,
     totalSessions: row.total_sessions,
-    daysSinceLastSession: row.days_since_last || 0,
+    daysSinceLastSession: row.days_since_last ?? 0,
   }));
 }
 

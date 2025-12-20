@@ -4,14 +4,14 @@ import type { ParsedSession, ParsedMessage, ToolUse, SessionStats } from '../typ
 
 // Codex JSONL entry types
 interface CodexEntry {
-  timestamp: string;
+  timestamp?: string;
   type: 'session_meta' | 'event_msg' | 'response_item' | 'turn_context' | 'message' | 'function_call';
   payload: unknown;
 }
 
 interface CodexSessionMeta {
-  id: string;
-  cwd: string;
+  id?: string;
+  cwd?: string;
   cli_version?: string;
   model_provider?: string;
   git?: {
@@ -34,10 +34,15 @@ interface CodexEventMsg {
   };
 }
 
+interface CodexContentItem {
+  type: string;
+  text?: string;
+}
+
 interface CodexResponseItem {
   type: 'message' | 'function_call' | 'function_call_output' | 'custom_tool_call' | 'reasoning';
   role?: string;
-  content?: Array<{ type: string; text?: string }>;
+  content?: CodexContentItem[];
   name?: string;
   input?: string; // For function_call/custom_tool_call (apply_patch content)
   arguments?: string; // For function_call (shell args as JSON)
@@ -84,12 +89,13 @@ async function* parseCodexJSONLStream(
 function extractFilesFromPatch(patchContent: string): string[] {
   const files: string[] = [];
   const regex = /\*\*\* (?:Add|Update|Delete) File:\s*(.+)/g;
-  let match;
-  while ((match = regex.exec(patchContent)) !== null) {
+  let match = regex.exec(patchContent);
+  while (match !== null) {
     const filePath = match[1].trim();
-    if (filePath && !files.includes(filePath)) {
+    if (filePath !== '' && !files.includes(filePath)) {
       files.push(filePath);
     }
+    match = regex.exec(patchContent);
   }
   return files;
 }
@@ -104,7 +110,11 @@ function mapCodexToolName(name: string): string {
     apply_patch: 'Edit',
     update_plan: 'TodoWrite',
   };
-  return mapping[name] || name;
+  return mapping[name] ?? name;
+}
+
+interface ShellArgs {
+  command?: unknown;
 }
 
 /**
@@ -113,21 +123,27 @@ function mapCodexToolName(name: string): string {
 function summarizeCodexToolInput(name: string, payload: CodexResponseItem): string {
   const MAX_LENGTH = 200;
 
-  if ((name === 'shell' || name === 'shell_command') && payload.arguments) {
+  if ((name === 'shell' || name === 'shell_command') && payload.arguments !== undefined) {
     try {
-      const args = JSON.parse(payload.arguments);
-      const cmd = Array.isArray(args.command) ? args.command.join(' ') : String(args.command || '');
+      const args = JSON.parse(payload.arguments) as ShellArgs;
+      let cmd = '';
+      if (Array.isArray(args.command)) {
+        cmd = args.command.join(' ');
+      } else if (typeof args.command === 'string' || typeof args.command === 'number' || typeof args.command === 'boolean') {
+        cmd = String(args.command);
+      }
       return truncate(cmd, MAX_LENGTH);
     } catch {
       return truncate(payload.arguments, MAX_LENGTH);
     }
   }
 
-  if (name === 'apply_patch' && payload.input) {
+  if (name === 'apply_patch' && payload.input !== undefined) {
     // Extract first file path from patch
     const files = extractFilesFromPatch(payload.input);
     if (files.length > 0) {
-      return files.length === 1 ? files[0] : `${files[0]} (+${files.length - 1} more)`;
+      const additionalFiles = files.length - 1;
+      return files.length === 1 ? files[0] : `${files[0]} (+${additionalFiles.toString()} more)`;
     }
     return truncate(payload.input, MAX_LENGTH);
   }
@@ -143,12 +159,12 @@ function truncate(str: string, maxLength: number): string {
 /**
  * Extract text content from Codex message content array
  */
-function extractTextFromContent(content: Array<{ type: string; text?: string }> | undefined): string {
-  if (!content || !Array.isArray(content)) return '';
+function extractTextFromContent(content: CodexContentItem[] | undefined): string {
+  if (content === undefined || !Array.isArray(content)) return '';
   const texts: string[] = [];
   for (const item of content) {
     // Handle both new format ('text') and old format ('input_text', 'output_text')
-    if ((item.type === 'text' || item.type === 'input_text' || item.type === 'output_text') && item.text) {
+    if ((item.type === 'text' || item.type === 'input_text' || item.type === 'output_text') && item.text !== undefined) {
       texts.push(item.text);
     }
   }
@@ -178,24 +194,25 @@ export async function parseCodexSessionFile(
 
   for await (const entry of parseCodexJSONLStream(filePath)) {
     // Track timestamps (skip entries without timestamps - common in old format)
-    if (entry.timestamp) {
-      if (!startTime || entry.timestamp < startTime) startTime = entry.timestamp;
-      if (!endTime || entry.timestamp > endTime) endTime = entry.timestamp;
+    if (entry.timestamp !== undefined && entry.timestamp !== '') {
+      if (startTime === '' || entry.timestamp < startTime) startTime = entry.timestamp;
+      if (endTime === '' || entry.timestamp > endTime) endTime = entry.timestamp;
     }
 
     // Handle session_meta (first line) - new format
     if (entry.type === 'session_meta') {
       const meta = entry.payload as CodexSessionMeta;
-      sessionId = meta.id || '';
-      gitBranch = meta.git?.branch || '';
+      sessionId = meta.id ?? '';
+      gitBranch = meta.git !== undefined ? meta.git.branch : '';
       continue;
     }
 
     // Handle old format first line (pre-October 2025): {id, timestamp, git, ...} without type
-    const rawEntry = entry as Record<string, unknown>;
-    if (rawEntry.id && !rawEntry.type && rawEntry.git) {
+    const rawEntry = entry as unknown as Record<string, unknown>;
+    if (rawEntry.id !== undefined && rawEntry.type === undefined && rawEntry.git !== undefined) {
       sessionId = rawEntry.id as string;
-      gitBranch = (rawEntry.git as Record<string, unknown>)?.branch as string || '';
+      const git = rawEntry.git as Record<string, unknown>;
+      gitBranch = (git.branch !== undefined ? git.branch as string : '');
       continue;
     }
 
@@ -207,23 +224,23 @@ export async function parseCodexSessionFile(
         userMessages++;
         messages.push({
           type: 'user',
-          timestamp: entry.timestamp,
-          text: payload.message || '',
+          timestamp: entry.timestamp ?? '',
+          text: payload.message ?? '',
           toolUses: [],
         });
       } else if (payload.type === 'agent_message') {
         assistantMessages++;
         messages.push({
           type: 'assistant',
-          timestamp: entry.timestamp,
-          text: payload.message || '',
+          timestamp: entry.timestamp ?? '',
+          text: payload.message ?? '',
           toolUses: [],
         });
-      } else if (payload.type === 'token_count' && payload.info?.total_token_usage) {
+      } else if (payload.type === 'token_count' && payload.info?.total_token_usage !== undefined) {
         // Track final token counts (total_token_usage accumulates)
         const usage = payload.info.total_token_usage;
-        totalInputTokens = usage.input_tokens + (usage.cached_input_tokens || 0);
-        totalOutputTokens = usage.output_tokens + (usage.reasoning_output_tokens || 0);
+        totalInputTokens = usage.input_tokens + (usage.cached_input_tokens ?? 0);
+        totalOutputTokens = usage.output_tokens + (usage.reasoning_output_tokens ?? 0);
       }
       continue;
     }
@@ -233,12 +250,12 @@ export async function parseCodexSessionFile(
       const payload = entry.payload as CodexResponseItem;
 
       // Function calls and custom tool calls (equivalent to Claude tool_use)
-      if ((payload.type === 'function_call' || payload.type === 'custom_tool_call') && payload.name) {
+      if ((payload.type === 'function_call' || payload.type === 'custom_tool_call') && payload.name !== undefined) {
         const mappedName = mapCodexToolName(payload.name);
-        toolCalls[mappedName] = (toolCalls[mappedName] || 0) + 1;
+        toolCalls[mappedName] = (toolCalls[mappedName] ?? 0) + 1;
 
         // Extract files from apply_patch
-        if (payload.name === 'apply_patch' && payload.input) {
+        if (payload.name === 'apply_patch' && payload.input !== undefined) {
           const files = extractFilesFromPatch(payload.input);
           files.forEach((f) => filesChanged.add(f));
         }
@@ -253,20 +270,20 @@ export async function parseCodexSessionFile(
         assistantMessages++;
         messages.push({
           type: 'assistant',
-          timestamp: entry.timestamp,
+          timestamp: entry.timestamp ?? '',
           text: '',
           toolUses: [toolUse],
         });
       }
 
       // Agent text messages from response_item
-      if (payload.type === 'message' && payload.role === 'assistant' && payload.content) {
+      if (payload.type === 'message' && payload.role === 'assistant' && payload.content !== undefined) {
         const text = extractTextFromContent(payload.content);
-        if (text) {
+        if (text !== '') {
           assistantMessages++;
           messages.push({
             type: 'assistant',
-            timestamp: entry.timestamp,
+            timestamp: entry.timestamp ?? '',
             text,
             toolUses: [],
           });
@@ -276,49 +293,48 @@ export async function parseCodexSessionFile(
 
     // Handle old format: top-level function_call (pre-October 2025)
     // Old format: {"type":"function_call","name":"shell","arguments":"{\"command\":[\"bash\",\"-lc\",\"apply_patch...\"]}"}
-    if (entry.type === 'function_call' && (entry as Record<string, unknown>).name) {
-      const oldEntry = entry as Record<string, unknown>;
+    if (entry.type === 'function_call' && (entry as unknown as Record<string, unknown>).name !== undefined) {
+      const oldEntry = entry as unknown as Record<string, unknown>;
       const name = oldEntry.name as string;
-      const argsStr = oldEntry.arguments as string;
+      const argsStr = oldEntry.arguments as string | undefined;
 
       // Check if this is a shell command containing apply_patch
-      if (name === 'shell' && argsStr) {
+      if (name === 'shell' && argsStr !== undefined) {
         try {
-          const args = JSON.parse(argsStr);
+          const args = JSON.parse(argsStr) as ShellArgs;
           const command = args.command;
           if (Array.isArray(command) && command.length >= 3) {
             const shellCmd = command[2] as string;
-            if (shellCmd?.includes('apply_patch')) {
+            const patchRegex = /apply_patch\s*<<\s*['"]?PATCH['"]?\n([\s\S]*?)\n\s*PATCH/;
+            const patchMatch = patchRegex.exec(shellCmd);
+            if (shellCmd.includes('apply_patch') && patchMatch !== null) {
               // Extract the patch content from the heredoc
-              const patchMatch = shellCmd.match(/apply_patch\s*<<\s*['"]?PATCH['"]?\n([\s\S]*?)\n\s*PATCH/);
-              if (patchMatch) {
-                toolCalls['Edit'] = (toolCalls['Edit'] || 0) + 1;
-                const files = extractFilesFromPatch(patchMatch[1]);
-                files.forEach((f) => filesChanged.add(f));
+              toolCalls.Edit = ('Edit' in toolCalls ? toolCalls.Edit : 0) + 1;
+              const files = extractFilesFromPatch(patchMatch[1]);
+              files.forEach((f) => filesChanged.add(f));
 
-                assistantMessages++;
-                messages.push({
-                  type: 'assistant',
-                  timestamp: (oldEntry.timestamp as string) || '',
-                  text: '',
-                  toolUses: [{
-                    name: 'Edit',
-                    input: `apply_patch: ${files.join(', ') || 'file changes'}`,
-                    rawInput: oldEntry,
-                  }],
-                });
-              }
-            } else {
-              // Regular shell command
-              toolCalls['Bash'] = (toolCalls['Bash'] || 0) + 1;
               assistantMessages++;
               messages.push({
                 type: 'assistant',
-                timestamp: (oldEntry.timestamp as string) || '',
+                timestamp: (oldEntry.timestamp as string | undefined) ?? '',
+                text: '',
+                toolUses: [{
+                  name: 'Edit',
+                  input: `apply_patch: ${files.join(', ') !== '' ? files.join(', ') : 'file changes'}`,
+                  rawInput: oldEntry,
+                }],
+              });
+            } else {
+              // Regular shell command
+              toolCalls.Bash = ('Bash' in toolCalls ? toolCalls.Bash : 0) + 1;
+              assistantMessages++;
+              messages.push({
+                type: 'assistant',
+                timestamp: (oldEntry.timestamp as string | undefined) ?? '',
                 text: '',
                 toolUses: [{
                   name: 'Bash',
-                  input: shellCmd?.substring(0, 100) || 'shell command',
+                  input: shellCmd.substring(0, 100),
                   rawInput: oldEntry,
                 }],
               });
@@ -333,16 +349,16 @@ export async function parseCodexSessionFile(
     // Handle old format: top-level message (pre-October 2025)
     // Old format: {"type":"message","role":"user/assistant","content":[{"type":"input_text/output_text","text":"..."}]}
     if (entry.type === 'message') {
-      const msgEntry = entry as unknown as { type: string; role: string; content?: Array<{ type: string; text?: string }> };
+      const msgEntry = entry as unknown as { type: string; role: string; content?: CodexContentItem[]; timestamp?: string };
       const text = extractTextFromContent(msgEntry.content);
 
       // Skip environment_context messages (just contain cwd/approval policy info)
-      if (text && !text.includes('<environment_context>')) {
+      if (text !== '' && !text.includes('<environment_context>')) {
         if (msgEntry.role === 'user') {
           userMessages++;
           messages.push({
             type: 'user',
-            timestamp: (entry as Record<string, unknown>).timestamp as string || '',
+            timestamp: msgEntry.timestamp ?? '',
             text,
             toolUses: [],
           });
@@ -350,7 +366,7 @@ export async function parseCodexSessionFile(
           assistantMessages++;
           messages.push({
             type: 'assistant',
-            timestamp: (entry as Record<string, unknown>).timestamp as string || '',
+            timestamp: msgEntry.timestamp ?? '',
             text,
             toolUses: [],
           });
@@ -360,14 +376,15 @@ export async function parseCodexSessionFile(
   }
 
   // Fallback to filename for sessionId
-  if (!sessionId) {
-    sessionId = filePath.split('/').pop()?.replace('.jsonl', '') || 'unknown';
+  if (sessionId === '') {
+    const filename = filePath.split('/').pop();
+    sessionId = filename?.replace('.jsonl', '') ?? 'unknown';
   }
 
   // Provide default timestamps if none found
   const now = new Date().toISOString();
-  if (!startTime) startTime = now;
-  if (!endTime) endTime = startTime;
+  if (startTime === '') startTime = now;
+  if (endTime === '') endTime = startTime;
 
   // Derive date from endTime with 3am boundary
   const date = getEffectiveDate(endTime);

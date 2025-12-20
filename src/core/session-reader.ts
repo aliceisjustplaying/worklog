@@ -31,7 +31,7 @@ export async function* parseJSONLStream(
   });
 
   for await (const line of rl) {
-    if (!line.trim()) continue;
+    if (line.trim() === '') continue;
     try {
       yield JSON.parse(line) as RawSessionEntry;
     } catch {
@@ -67,37 +67,37 @@ export async function parseSessionFile(
     seen.add(entry.uuid);
 
     // Extract metadata from first entry
-    if (!sessionId && entry.sessionId) {
+    if (sessionId === '') {
       sessionId = entry.sessionId;
     }
-    if (!gitBranch && entry.gitBranch) {
+    if (gitBranch === '' && entry.gitBranch !== undefined) {
       gitBranch = entry.gitBranch;
     }
 
     // Track timestamps
-    if (!startTime || entry.timestamp < startTime) {
+    if (startTime === '' || entry.timestamp < startTime) {
       startTime = entry.timestamp;
     }
-    if (!endTime || entry.timestamp > endTime) {
+    if (endTime === '' || entry.timestamp > endTime) {
       endTime = entry.timestamp;
     }
 
     // Extract token usage from assistant messages
-    if (entry.type === 'assistant' && entry.message?.usage) {
+    if (entry.type === 'assistant' && entry.message.usage !== undefined) {
       const usage = entry.message.usage;
-      totalInputTokens += usage.input_tokens || 0;
-      totalOutputTokens += usage.output_tokens || 0;
-      totalInputTokens += usage.cache_creation_input_tokens || 0;
-      totalInputTokens += usage.cache_read_input_tokens || 0;
+      totalInputTokens += usage.input_tokens;
+      totalOutputTokens += usage.output_tokens;
+      totalInputTokens += usage.cache_creation_input_tokens ?? 0;
+      totalInputTokens += usage.cache_read_input_tokens ?? 0;
     }
 
     // Parse message content
-    const text = extractText(entry.message?.content);
-    const toolUses = extractToolUses(entry.message?.content);
+    const text = extractText(entry.message.content);
+    const toolUses = extractToolUses(entry.message.content);
 
     // Count tool calls
     for (const tool of toolUses) {
-      toolCalls[tool.name] = (toolCalls[tool.name] || 0) + 1;
+      toolCalls[tool.name] = (toolCalls[tool.name] ?? 0) + 1;
     }
 
     if (entry.type === 'user') userMessages++;
@@ -112,16 +112,16 @@ export async function parseSessionFile(
   }
 
   // Use filename as sessionId fallback
-  if (!sessionId) {
-    sessionId = filePath.split('/').pop()?.replace('.jsonl', '') || 'unknown';
+  if (sessionId === '') {
+    sessionId = filePath.split('/').pop()?.replace('.jsonl', '') ?? 'unknown';
   }
 
   // Provide default timestamps if none found
   const now = new Date().toISOString();
-  if (!startTime) {
+  if (startTime === '') {
     startTime = now;
   }
-  if (!endTime) {
+  if (endTime === '') {
     endTime = startTime;
   }
 
@@ -154,15 +154,15 @@ export async function parseSessionFile(
 /**
  * Extract text from message content array
  */
-function extractText(content: MessageContent[] | undefined): string {
-  if (!content || !Array.isArray(content)) return '';
+function extractText(content: MessageContent[]): string {
+  if (!Array.isArray(content)) return '';
 
   const texts: string[] = [];
   for (const item of content) {
     if (item.type === 'text') {
       // Handle both formats: { text: "..." } and { content: "..." }
       const text = 'text' in item ? item.text : 'content' in item ? item.content : '';
-      if (text) texts.push(text);
+      if (text !== '') texts.push(text);
     }
   }
   return texts.join('\n');
@@ -171,8 +171,8 @@ function extractText(content: MessageContent[] | undefined): string {
 /**
  * Extract tool uses from message content
  */
-function extractToolUses(content: MessageContent[] | undefined): ToolUse[] {
-  if (!content || !Array.isArray(content)) return [];
+function extractToolUses(content: MessageContent[]): ToolUse[] {
+  if (!Array.isArray(content)) return [];
 
   const tools: ToolUse[] = [];
   for (const item of content) {
@@ -198,18 +198,18 @@ function summarizeToolInput(
 
   switch (toolName) {
     case 'Bash':
-      return truncate(String(input.command || ''), MAX_LENGTH);
+      return truncate(typeof input.command === 'string' ? input.command : '', MAX_LENGTH);
     case 'Read':
-      return truncate(String(input.file_path || ''), MAX_LENGTH);
+      return truncate(typeof input.file_path === 'string' ? input.file_path : '', MAX_LENGTH);
     case 'Write':
     case 'Edit':
-      return truncate(String(input.file_path || ''), MAX_LENGTH);
+      return truncate(typeof input.file_path === 'string' ? input.file_path : '', MAX_LENGTH);
     case 'Glob':
-      return truncate(String(input.pattern || ''), MAX_LENGTH);
+      return truncate(typeof input.pattern === 'string' ? input.pattern : '', MAX_LENGTH);
     case 'Grep':
-      return truncate(String(input.pattern || ''), MAX_LENGTH);
+      return truncate(typeof input.pattern === 'string' ? input.pattern : '', MAX_LENGTH);
     case 'Task':
-      return truncate(String(input.description || ''), MAX_LENGTH);
+      return truncate(typeof input.description === 'string' ? input.description : '', MAX_LENGTH);
     default:
       return truncate(JSON.stringify(input), MAX_LENGTH);
   }
@@ -304,7 +304,7 @@ export function classifyWork(files: string[]): WorkClassification {
 
   for (const file of files) {
     const lower = file.toLowerCase();
-    const filename = file.split('/').pop() || '';
+    const filename = file.split('/').pop() ?? '';
 
     // Tests
     if (
@@ -400,35 +400,35 @@ export function classifyWork(files: string[]): WorkClassification {
   const threshold = total * 0.5;
 
   if (scope.tests > threshold) {
-    signals.push(`${scope.tests}/${total} files are tests`);
+    signals.push(`${scope.tests.toString()}/${total.toString()} files are tests`);
     return { type: 'tests', signals, scope, scopeSummary };
   }
 
   if (scope.docs > threshold) {
-    signals.push(`${scope.docs}/${total} files are documentation`);
+    signals.push(`${scope.docs.toString()}/${total.toString()} files are documentation`);
     return { type: 'docs', signals, scope, scopeSummary };
   }
 
   if (scope.types + scope.config > threshold) {
     if (scope.types > scope.config) {
-      signals.push(`${scope.types}/${total} files are types`);
+      signals.push(`${scope.types.toString()}/${total.toString()} files are types`);
     } else {
-      signals.push(`${scope.config}/${total} files are config`);
+      signals.push(`${scope.config.toString()}/${total.toString()} files are config`);
     }
     return { type: 'infrastructure', signals, scope, scopeSummary };
   }
 
   if (featureFiles > threshold) {
-    signals.push(`${featureFiles}/${total} files are feature code`);
+    signals.push(`${featureFiles.toString()}/${total.toString()} files are feature code`);
     return { type: 'feature', signals, scope, scopeSummary };
   }
 
   // Mixed - build a description
-  if (featureFiles > 0) signals.push(`${featureFiles} feature`);
-  if (scope.tests > 0) signals.push(`${scope.tests} test`);
-  if (scope.types > 0) signals.push(`${scope.types} type`);
-  if (scope.config > 0) signals.push(`${scope.config} config`);
-  if (scope.docs > 0) signals.push(`${scope.docs} doc`);
+  if (featureFiles > 0) signals.push(`${featureFiles.toString()} feature`);
+  if (scope.tests > 0) signals.push(`${scope.tests.toString()} test`);
+  if (scope.types > 0) signals.push(`${scope.types.toString()} type`);
+  if (scope.config > 0) signals.push(`${scope.config.toString()} config`);
+  if (scope.docs > 0) signals.push(`${scope.docs.toString()} doc`);
 
   return { type: 'mixed', signals, scope, scopeSummary };
 }
@@ -441,7 +441,7 @@ export function createCondensedTranscript(session: ParsedSession): string {
   const parts: string[] = [];
 
   parts.push(`Project: ${session.projectName}`);
-  if (session.gitBranch) {
+  if (session.gitBranch !== '') {
     parts.push(`Branch: ${session.gitBranch}`);
   }
   parts.push(`Duration: ${formatDuration(session.startTime, session.endTime)}`);
@@ -456,18 +456,24 @@ export function createCondensedTranscript(session: ParsedSession): string {
     if (msg.type === 'assistant') {
       for (const tool of msg.toolUses) {
         if (tool.name === 'Write') {
-          const path = String((tool.rawInput as any)?.file_path || '');
-          if (path && !filesWritten.includes(path)) {
+          const rawInput = tool.rawInput;
+          const filePath = rawInput?.file_path;
+          const path = typeof filePath === 'string' ? filePath : '';
+          if (path !== '' && !filesWritten.includes(path)) {
             filesWritten.push(path);
           }
         } else if (tool.name === 'Edit') {
-          const path = String((tool.rawInput as any)?.file_path || '');
-          if (path && !filesEdited.includes(path)) {
+          const rawInput = tool.rawInput;
+          const filePath = rawInput?.file_path;
+          const path = typeof filePath === 'string' ? filePath : '';
+          if (path !== '' && !filesEdited.includes(path)) {
             filesEdited.push(path);
           }
         } else if (tool.name === 'Bash') {
-          const cmd = String((tool.rawInput as any)?.command || '').slice(0, 100);
-          if (cmd && commandsRun.length < 10) {
+          const rawInput = tool.rawInput;
+          const command = rawInput?.command;
+          const cmd = typeof command === 'string' ? command.slice(0, 100) : '';
+          if (cmd !== '' && commandsRun.length < 10) {
             commandsRun.push(cmd);
           }
         }
@@ -479,28 +485,28 @@ export function createCondensedTranscript(session: ParsedSession): string {
   const allFiles = [...filesWritten, ...filesEdited];
   const classification = classifyWork(allFiles);
   parts.push(`WORK TYPE: ${classification.type}`);
-  if (classification.scopeSummary) {
+  if (classification.scopeSummary !== '') {
     parts.push(`SCOPE: ${classification.scopeSummary}`);
   }
   parts.push('');
 
   // Show action summary at the TOP
   if (filesWritten.length > 0) {
-    parts.push(`FILES CREATED (${filesWritten.length}):`);
+    parts.push(`FILES CREATED (${filesWritten.length.toString()}):`);
     filesWritten.slice(0, 15).forEach(f => parts.push(`  - ${f}`));
-    if (filesWritten.length > 15) parts.push(`  ... and ${filesWritten.length - 15} more`);
+    if (filesWritten.length > 15) parts.push(`  ... and ${(filesWritten.length - 15).toString()} more`);
     parts.push('');
   }
 
   if (filesEdited.length > 0) {
-    parts.push(`FILES EDITED (${filesEdited.length}):`);
+    parts.push(`FILES EDITED (${filesEdited.length.toString()}):`);
     filesEdited.slice(0, 15).forEach(f => parts.push(`  - ${f}`));
-    if (filesEdited.length > 15) parts.push(`  ... and ${filesEdited.length - 15} more`);
+    if (filesEdited.length > 15) parts.push(`  ... and ${(filesEdited.length - 15).toString()} more`);
     parts.push('');
   }
 
   if (commandsRun.length > 0) {
-    parts.push(`COMMANDS RUN (${commandsRun.length}):`);
+    parts.push(`COMMANDS RUN (${commandsRun.length.toString()}):`);
     commandsRun.slice(0, 5).forEach(c => parts.push(`  $ ${c}`));
     parts.push('');
   }
@@ -511,11 +517,11 @@ export function createCondensedTranscript(session: ParsedSession): string {
   for (const msg of session.messages) {
     if (messageCount > 20) break; // Limit to avoid overwhelming
 
-    if (msg.type === 'user' && msg.text) {
+    if (msg.type === 'user' && msg.text !== '') {
       const text = msg.text.slice(0, 300);
       parts.push(`User: ${text}`);
       messageCount++;
-    } else if (msg.type === 'assistant' && msg.text) {
+    } else if (msg.type === 'assistant' && msg.text !== '') {
       const text = msg.text.slice(0, 200);
       parts.push(`Assistant: ${text}`);
       messageCount++;
@@ -527,9 +533,9 @@ export function createCondensedTranscript(session: ParsedSession): string {
   const toolSummary = Object.entries(session.stats.toolCalls)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
-    .map(([name, count]) => `${name}(${count})`)
+    .map(([name, count]) => `${name}(${count.toString()})`)
     .join(', ');
-  if (toolSummary) {
+  if (toolSummary !== '') {
     parts.push(`Tool usage: ${toolSummary}`);
   }
 
@@ -537,16 +543,16 @@ export function createCondensedTranscript(session: ParsedSession): string {
 }
 
 function formatDuration(start: string, end: string): string {
-  if (!start || !end) return 'unknown';
+  if (start === '' || end === '') return 'unknown';
 
   const startDate = new Date(start);
   const endDate = new Date(end);
   const diffMs = endDate.getTime() - startDate.getTime();
 
   const minutes = Math.floor(diffMs / 60000);
-  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 60) return `${minutes.toString()} min`;
 
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
-  return `${hours}h ${remainingMinutes}m`;
+  return `${hours.toString()}h ${remainingMinutes.toString()}m`;
 }
