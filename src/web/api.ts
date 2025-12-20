@@ -4,6 +4,10 @@ import type { ProjectStatus } from '../types';
 
 type ApiHandler = (req: Request, url: URL) => Promise<Response>;
 
+interface URLWithParams extends URL {
+  params?: Record<string, string>;
+}
+
 const routes: Record<string, ApiHandler> = {
   'GET /api/days': handleGetDays,
   'GET /api/days/:date': handleGetDayDetail,
@@ -30,7 +34,7 @@ export async function handleApiRequest(
     if (params !== null) {
       try {
         // Attach params to URL for handler access
-        (url as any).params = params;
+        (url as URLWithParams).params = params;
         return await handler(req, url);
       } catch (error) {
         console.error('API error:', error);
@@ -53,9 +57,9 @@ function matchPath(
 
   const params: Record<string, string> = {};
 
-  for (let i = 0; i < patternParts.length; i++) {
-    const patternPart = patternParts[i];
-    const pathPart = pathParts[i];
+  for (const [i, patternPart] of patternParts.entries()) {
+    // pathPart is guaranteed to exist since we verified lengths match
+    const pathPart = pathParts[i] ?? '';
 
     if (patternPart.startsWith(':')) {
       params[patternPart.slice(1)] = pathPart;
@@ -79,47 +83,55 @@ function jsonResponse(data: unknown, status = 200): Response {
 
 // Handlers
 
-async function handleGetDays(req: Request, url: URL): Promise<Response> {
+function handleGetDays(_req: Request, url: URL): Promise<Response> {
   const limitParam = url.searchParams.get('limit');
-  const days = limitParam ? getDays(parseInt(limitParam)) : getDays();
-  return jsonResponse(days);
+  const days = limitParam !== null ? getDays(parseInt(limitParam, 10)) : getDays();
+  return Promise.resolve(jsonResponse(days));
 }
 
-async function handleGetDayDetail(req: Request, url: URL): Promise<Response> {
-  const params = (url as any).params as Record<string, string>;
-  const date = params.date;
+function handleGetDayDetail(_req: Request, url: URL): Promise<Response> {
+  const params = (url as { params?: Record<string, string> }).params;
+  const date = params?.date;
 
-  const detail = getDayDetail(date);
-  if (!detail) {
-    return jsonResponse({ error: 'Day not found' }, 404);
+  if (date === undefined) {
+    return Promise.resolve(jsonResponse({ error: 'Missing date parameter' }, 400));
   }
 
-  return jsonResponse(detail);
+  const detail = getDayDetail(date);
+  if (detail === null) {
+    return Promise.resolve(jsonResponse({ error: 'Day not found' }, 404));
+  }
+
+  return Promise.resolve(jsonResponse(detail));
 }
 
-async function handleGetDayBrag(req: Request, url: URL): Promise<Response> {
-  const params = (url as any).params as Record<string, string>;
-  const date = params.date;
+function handleGetDayBrag(_req: Request, url: URL): Promise<Response> {
+  const params = (url as { params?: Record<string, string> }).params;
+  const date = params?.date;
 
-  const detail = getDayDetail(date);
-  if (!detail) {
-    return jsonResponse({ error: 'Day not found' }, 404);
+  if (date === undefined) {
+    return Promise.resolve(jsonResponse({ error: 'Missing date parameter' }, 400));
   }
 
-  return jsonResponse({
+  const detail = getDayDetail(date);
+  if (detail === null) {
+    return Promise.resolve(jsonResponse({ error: 'Day not found' }, 404));
+  }
+
+  return Promise.resolve(jsonResponse({
     date,
-    bragSummary: detail.bragSummary || 'No summary available',
+    bragSummary: detail.bragSummary ?? 'No summary available',
     projectCount: detail.projects.length,
     sessionCount: detail.stats.totalSessions,
-  });
+  }));
 }
 
-async function handleGetStats(req: Request, url: URL): Promise<Response> {
+function handleGetStats(_req: Request, _url: URL): Promise<Response> {
   const stats = getStats();
-  return jsonResponse(stats);
+  return Promise.resolve(jsonResponse(stats));
 }
 
-async function handleRefresh(req: Request, url: URL): Promise<Response> {
+async function handleRefresh(_req: Request, _url: URL): Promise<Response> {
   // Run processing in background
   const startTime = Date.now();
 
@@ -146,16 +158,16 @@ async function handleRefresh(req: Request, url: URL): Promise<Response> {
   }
 }
 
-async function handleGetProjects(req: Request, url: URL): Promise<Response> {
+function handleGetProjects(_req: Request, url: URL): Promise<Response> {
   const status = url.searchParams.get('status') as ProjectStatus | null;
-  const projects = getProjects(status || undefined);
-  return jsonResponse(projects);
+  const projects = getProjects(status ?? undefined);
+  return Promise.resolve(jsonResponse(projects));
 }
 
-async function handleUpdateProjectStatus(req: Request, url: URL): Promise<Response> {
-  const body = await req.json() as { path: string; status: ProjectStatus };
+async function handleUpdateProjectStatus(req: Request, _url: URL): Promise<Response> {
+  const body = (await req.json()) as { path?: string; status?: ProjectStatus };
 
-  if (!body.path || !body.status) {
+  if (body.path === undefined || body.status === undefined) {
     return jsonResponse({ error: 'Missing path or status' }, 400);
   }
 

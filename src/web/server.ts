@@ -3,11 +3,11 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { handleApiRequest } from './api';
 
-const PORT = parseInt(process.env.PORT || '3456');
+const PORT = parseInt(process.env.PORT ?? '3456');
 const STATIC_DIR = join(import.meta.dir, '../../dist');
 
-export async function startServer() {
-  console.log(`\n🚀 Starting worklog server on http://localhost:${PORT}\n`);
+export function startServer() {
+  console.log(`\n🚀 Starting worklog server on http://localhost:${String(PORT)}\n`);
 
   serve({
     port: PORT,
@@ -31,7 +31,7 @@ export async function startServer() {
   console.log('Server running. Press Ctrl+C to stop.\n');
 }
 
-async function serveStatic(pathname: string): Promise<Response> {
+function serveStatic(pathname: string): Response {
   // Map pathname to file
   let filePath = pathname === '/' ? '/index.html' : pathname;
   filePath = join(STATIC_DIR, filePath);
@@ -100,5 +100,5 @@ function getContentType(filePath: string): string {
     woff: 'font/woff',
     woff2: 'font/woff2',
   };
-  return types[ext || ''] || 'application/octet-stream';
+  return types[ext ?? ''] ?? 'application/octet-stream';
 }
