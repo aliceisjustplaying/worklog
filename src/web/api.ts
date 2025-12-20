@@ -1,5 +1,6 @@
-import { getDays, getDayDetail, getStats } from '../core/db';
+import { getDays, getDayDetail, getStats, getProjects, updateProjectStatus } from '../core/db';
 import { processCommand } from '../cli/process';
+import type { ProjectStatus } from '../types';
 
 type ApiHandler = (req: Request, url: URL) => Promise<Response>;
 
@@ -9,6 +10,8 @@ const routes: Record<string, ApiHandler> = {
   'GET /api/days/:date/brag': handleGetDayBrag,
   'GET /api/stats': handleGetStats,
   'POST /api/refresh': handleRefresh,
+  'GET /api/projects': handleGetProjects,
+  'PATCH /api/projects/status': handleUpdateProjectStatus,
 };
 
 export async function handleApiRequest(
@@ -141,4 +144,30 @@ async function handleRefresh(req: Request, url: URL): Promise<Response> {
       500
     );
   }
+}
+
+async function handleGetProjects(req: Request, url: URL): Promise<Response> {
+  const status = url.searchParams.get('status') as ProjectStatus | null;
+  const projects = getProjects(status || undefined);
+  return jsonResponse(projects);
+}
+
+async function handleUpdateProjectStatus(req: Request, url: URL): Promise<Response> {
+  const body = await req.json() as { path: string; status: ProjectStatus };
+
+  if (!body.path || !body.status) {
+    return jsonResponse({ error: 'Missing path or status' }, 400);
+  }
+
+  const validStatuses: ProjectStatus[] = ['shipped', 'in_progress', 'abandoned', 'one_off', 'experiment'];
+  if (!validStatuses.includes(body.status)) {
+    return jsonResponse({ error: 'Invalid status' }, 400);
+  }
+
+  const updated = updateProjectStatus(body.path, body.status);
+  if (!updated) {
+    return jsonResponse({ error: 'Project not found' }, 404);
+  }
+
+  return jsonResponse({ success: true });
 }
