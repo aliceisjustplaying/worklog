@@ -176,15 +176,25 @@ export async function parseCodexSessionFile(
   const filesChanged = new Set<string>();
 
   for await (const entry of parseCodexJSONLStream(filePath)) {
-    // Track timestamps
-    if (!startTime || entry.timestamp < startTime) startTime = entry.timestamp;
-    if (!endTime || entry.timestamp > endTime) endTime = entry.timestamp;
+    // Track timestamps (skip entries without timestamps - common in old format)
+    if (entry.timestamp) {
+      if (!startTime || entry.timestamp < startTime) startTime = entry.timestamp;
+      if (!endTime || entry.timestamp > endTime) endTime = entry.timestamp;
+    }
 
-    // Handle session_meta (first line)
+    // Handle session_meta (first line) - new format
     if (entry.type === 'session_meta') {
       const meta = entry.payload as CodexSessionMeta;
       sessionId = meta.id || '';
       gitBranch = meta.git?.branch || '';
+      continue;
+    }
+
+    // Handle old format first line (pre-October 2025): {id, timestamp, git, ...} without type
+    const rawEntry = entry as Record<string, unknown>;
+    if (rawEntry.id && !rawEntry.type && rawEntry.git) {
+      sessionId = rawEntry.id as string;
+      gitBranch = (rawEntry.git as Record<string, unknown>)?.branch as string || '';
       continue;
     }
 
@@ -259,6 +269,62 @@ export async function parseCodexSessionFile(
             text,
             toolUses: [],
           });
+        }
+      }
+    }
+
+    // Handle old format: top-level function_call (pre-October 2025)
+    // Old format: {"type":"function_call","name":"shell","arguments":"{\"command\":[\"bash\",\"-lc\",\"apply_patch...\"]}"}
+    if (entry.type === 'function_call' && (entry as Record<string, unknown>).name) {
+      const oldEntry = entry as Record<string, unknown>;
+      const name = oldEntry.name as string;
+      const argsStr = oldEntry.arguments as string;
+
+      // Check if this is a shell command containing apply_patch
+      if (name === 'shell' && argsStr) {
+        try {
+          const args = JSON.parse(argsStr);
+          const command = args.command;
+          if (Array.isArray(command) && command.length >= 3) {
+            const shellCmd = command[2] as string;
+            if (shellCmd?.includes('apply_patch')) {
+              // Extract the patch content from the heredoc
+              const patchMatch = shellCmd.match(/apply_patch\s*<<\s*['"]?PATCH['"]?\n([\s\S]*?)\n\s*PATCH/);
+              if (patchMatch) {
+                toolCalls['Edit'] = (toolCalls['Edit'] || 0) + 1;
+                const files = extractFilesFromPatch(patchMatch[1]);
+                files.forEach((f) => filesChanged.add(f));
+
+                assistantMessages++;
+                messages.push({
+                  type: 'assistant',
+                  timestamp: (oldEntry.timestamp as string) || '',
+                  text: '',
+                  toolUses: [{
+                    name: 'Edit',
+                    input: `apply_patch: ${files.join(', ') || 'file changes'}`,
+                    rawInput: oldEntry,
+                  }],
+                });
+              }
+            } else {
+              // Regular shell command
+              toolCalls['Bash'] = (toolCalls['Bash'] || 0) + 1;
+              assistantMessages++;
+              messages.push({
+                type: 'assistant',
+                timestamp: (oldEntry.timestamp as string) || '',
+                text: '',
+                toolUses: [{
+                  name: 'Bash',
+                  input: shellCmd?.substring(0, 100) || 'shell command',
+                  rawInput: oldEntry,
+                }],
+              });
+            }
+          }
+        } catch {
+          // Invalid JSON in arguments
         }
       }
     }

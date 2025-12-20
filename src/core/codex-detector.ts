@@ -16,23 +16,54 @@ export function getCodexPaths(): string[] {
 }
 
 /**
- * Extract metadata from the first line (session_meta) of a Codex session file
+ * Extract metadata from a Codex session file
+ * Supports both new format (session_meta) and old format (pre-October 2025)
  */
 function extractCodexSessionMeta(
   filePath: string
 ): { cwd: string; sessionId: string; gitBranch: string } | null {
   try {
     const content = readFileSync(filePath, 'utf-8');
-    const firstLine = content.split('\n')[0];
+    const lines = content.split('\n');
+    const firstLine = lines[0];
     if (!firstLine) return null;
 
     const entry = JSON.parse(firstLine);
+
+    // New format: type === 'session_meta' with payload.cwd
     if (entry.type === 'session_meta' && entry.payload?.cwd) {
       return {
         cwd: entry.payload.cwd,
         sessionId: entry.payload.id || '',
         gitBranch: entry.payload.git?.branch || '',
       };
+    }
+
+    // Old format: id at top level, cwd in environment_context message
+    if (entry.id && !entry.type) {
+      const sessionId = entry.id;
+      const gitBranch = entry.git?.branch || '';
+
+      // Search first few lines for environment_context with cwd
+      for (let i = 0; i < Math.min(lines.length, 10); i++) {
+        const line = lines[i];
+        if (!line) continue;
+        try {
+          const msg = JSON.parse(line);
+          if (msg.type === 'message' && msg.content) {
+            for (const block of msg.content) {
+              if (block.type === 'input_text' && block.text?.includes('Current working directory:')) {
+                const match = block.text.match(/Current working directory: ([^\n\\]+)/);
+                if (match) {
+                  return { cwd: match[1], sessionId, gitBranch };
+                }
+              }
+            }
+          }
+        } catch {
+          // Skip malformed lines
+        }
+      }
     }
   } catch {
     // Invalid JSON or missing fields
