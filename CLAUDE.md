@@ -35,6 +35,8 @@ The LLM prompts explicitly say "OUTCOMES only, never exploration" to prevent sum
 - Kill any stale process on port 3456 before running `bun cli serve`
 - **Monorepo path detection**: Claude's path encoding is lossy (`/` → `-`), so `taper-calculator-apps-web` could mean a dashed name or nested dirs. The code probes the filesystem right-to-left to find which interpretation exists, then uses git root as canonical project.
 - **Codex tool types**: Codex uses both `function_call` AND `custom_tool_call` in response_items. The `apply_patch` tool uses `custom_tool_call`, while `shell_command` uses `function_call`. Both must be handled in `codex-reader.ts`.
+- **Old Codex format (pre-October 2025)**: Sessions before October 2025 have a completely different structure - no `type: 'session_meta'` wrapper, no timestamps on individual entries, and `apply_patch` embedded in shell command heredocs. The working directory must be extracted from the `environment_context` message content, not metadata. See `codex-detector.ts` and `codex-reader.ts` for the dual-format handling.
+- **API/db default layering**: When changing default values (like query limits), check BOTH the db function AND the API handler. The API handler in `api.ts` can override db.ts defaults with its own fallback values.
 
 ## Summary Quality
 
