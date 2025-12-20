@@ -122,9 +122,6 @@ export interface DBProcessedFile {
   processed_at: string;
 }
 
-// Project types
-export type ProjectStatus = 'shipped' | 'in_progress' | 'abandoned' | 'one_off' | 'experiment';
-
 export interface ProjectListItem {
   path: string;
   name: string;
@@ -173,7 +170,9 @@ export interface SessionDetail {
 export type ProjectStatus =
   | 'shipped'
   | 'in_progress'
+  | 'ready_to_ship'
   | 'abandoned'
+  | 'ignore'
   | 'one_off'
   | 'experiment';
 
