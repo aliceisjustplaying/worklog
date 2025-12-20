@@ -147,7 +147,8 @@ function extractTextFromContent(content: Array<{ type: string; text?: string }> 
   if (!content || !Array.isArray(content)) return '';
   const texts: string[] = [];
   for (const item of content) {
-    if (item.type === 'text' && item.text) {
+    // Handle both new format ('text') and old format ('input_text', 'output_text')
+    if ((item.type === 'text' || item.type === 'input_text' || item.type === 'output_text') && item.text) {
       texts.push(item.text);
     }
   }
