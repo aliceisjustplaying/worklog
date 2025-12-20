@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { RefreshCw, Activity, Calendar } from 'lucide-react';
+import { RefreshCw, Activity, Calendar, Folder } from 'lucide-react';
 import { useStats, useRefresh } from '../hooks/useWorklog';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -25,6 +25,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </Link>
 
           <div className="flex items-center gap-6">
+            <Link
+              to="/projects"
+              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-blue-600 transition-colors"
+            >
+              <Folder size={16} />
+              <span className="hidden sm:inline">Projects</span>
+            </Link>
+
             {stats && (
               <div className="hidden sm:flex gap-4 text-sm text-slate-500">
                 <div className="flex items-center gap-1.5">

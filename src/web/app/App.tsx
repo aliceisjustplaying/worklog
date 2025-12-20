@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import DayList from './components/DayList';
 import DayView from './components/DayView';
+import ProjectList from './components/ProjectList';
 
 function App() {
   return (
@@ -11,6 +12,7 @@ function App() {
         <Routes>
           <Route path="/" element={<DayList />} />
           <Route path="/day/:date" element={<DayView />} />
+          <Route path="/projects" element={<ProjectList />} />
         </Routes>
       </Layout>
     </BrowserRouter>
