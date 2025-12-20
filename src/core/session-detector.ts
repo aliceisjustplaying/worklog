@@ -1,6 +1,6 @@
 import { join, dirname } from 'path';
 import { homedir } from 'os';
-import { existsSync, readdirSync, statSync } from 'fs';
+import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
 import { createHash } from 'crypto';
 import { isFileProcessed } from './db';
 
@@ -47,6 +47,66 @@ export function getClaudePaths(): string[] {
   return [...envPaths, ...defaults].filter((p) =>
     existsSync(join(p, 'projects'))
   );
+}
+
+/**
+ * Resolve a full encoded path by probing the filesystem.
+ * Handles paths like "Users-sarah/.cache-pdf-to-markdown" where we need to find
+ * where the base directory ends and the project name (with dashes) begins.
+ *
+ * If sessionFilePath is provided and filesystem probing fails, reads the session
+ * file to extract the original cwd.
+ */
+function resolveFullPath(encodedPath: string, sessionFilePath?: string): string {
+  const parts = encodedPath.split('-');
+
+  // Try interpretations from left to right
+  // Build up the path, converting dashes to slashes until we find a directory
+  // that contains the rest as a project folder
+  for (let i = parts.length - 1; i >= 1; i--) {
+    const baseParts = parts.slice(0, i);
+    const projectParts = parts.slice(i);
+
+    const basePath = '/' + baseParts.join('/');
+    const projectName = projectParts.join('-');
+
+    // Check if basePath exists and contains projectName
+    const fullPath = `${basePath}/${projectName}`;
+    if (existsSync(fullPath)) {
+      return fullPath;
+    }
+  }
+
+  // Filesystem probing failed - try reading cwd from session file
+  if (sessionFilePath && existsSync(sessionFilePath)) {
+    const cwd = extractCwdFromSessionFile(sessionFilePath);
+    if (cwd) {
+      return cwd;
+    }
+  }
+
+  // Nothing found - just convert all dashes to slashes
+  return '/' + encodedPath.replace(/-/g, '/');
+}
+
+/**
+ * Read the first few lines of a session file to extract the cwd.
+ */
+function extractCwdFromSessionFile(filePath: string): string | null {
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n').slice(0, 10);
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line);
+        if (entry.cwd && typeof entry.cwd === 'string') {
+          return entry.cwd;
+        }
+      } catch {}
+    }
+  } catch {}
+  return null;
 }
 
 /**
@@ -121,7 +181,10 @@ function stripDatePrefix(name: string): string {
   return name.replace(/^\d{4}-\d{2}-\d{2}-/, '');
 }
 
-export function decodeProjectFolder(folderName: string): { path: string; name: string } {
+export function decodeProjectFolder(
+  folderName: string,
+  sessionFilePath?: string
+): { path: string; name: string } {
   // Remove leading dash
   const withoutLeading = folderName.slice(1);
 
@@ -142,8 +205,13 @@ export function decodeProjectFolder(folderName: string): { path: string; name: s
     decodedPath = resolveProjectPath(basePath, projectPart);
     isTriesProject = true;
   } else {
-    // Fallback: just replace all dashes with slashes
-    decodedPath = '/' + withoutLeading.replace(/-/g, '/');
+    // Fallback for paths outside src/a/ and src/tries/
+    // Handle hidden folders: -- encodes /. (e.g., /.cache, /.config)
+    const withHiddenFolders = withoutLeading.replace(/--/g, '/.');
+
+    // Try to find where the base path ends and project name begins
+    // by probing the filesystem progressively, with session file fallback
+    decodedPath = resolveFullPath(withHiddenFolders, sessionFilePath);
   }
 
   // Special case: home directory should show as "~"
@@ -213,10 +281,14 @@ export function findAllSessionFiles(): SessionFile[] {
       const stat = statSync(folderPath);
       if (!stat.isDirectory()) continue;
 
-      const { path: projectPath, name: projectName } = decodeProjectFolder(folder);
-
       // Find all .jsonl files in this project folder
       const files = readdirSync(folderPath).filter((f) => f.endsWith('.jsonl'));
+      if (files.length === 0) continue;
+
+      // Use the first session file to help decode the project folder
+      // (provides cwd fallback when the original directory no longer exists)
+      const firstSessionPath = join(folderPath, files[0]);
+      const { path: projectPath, name: projectName } = decodeProjectFolder(folder, firstSessionPath);
 
       for (const file of files) {
         const filePath = join(folderPath, file);
