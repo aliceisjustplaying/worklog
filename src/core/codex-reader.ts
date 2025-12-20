@@ -329,6 +329,34 @@ export async function parseCodexSessionFile(
         }
       }
     }
+
+    // Handle old format: top-level message (pre-October 2025)
+    // Old format: {"type":"message","role":"user/assistant","content":[{"type":"input_text/output_text","text":"..."}]}
+    if (entry.type === 'message') {
+      const msgEntry = entry as unknown as { type: string; role: string; content?: Array<{ type: string; text?: string }> };
+      const text = extractTextFromContent(msgEntry.content);
+
+      // Skip environment_context messages (just contain cwd/approval policy info)
+      if (text && !text.includes('<environment_context>')) {
+        if (msgEntry.role === 'user') {
+          userMessages++;
+          messages.push({
+            type: 'user',
+            timestamp: (entry as Record<string, unknown>).timestamp as string || '',
+            text,
+            toolUses: [],
+          });
+        } else if (msgEntry.role === 'assistant') {
+          assistantMessages++;
+          messages.push({
+            type: 'assistant',
+            timestamp: (entry as Record<string, unknown>).timestamp as string || '',
+            text,
+            toolUses: [],
+          });
+        }
+      }
+    }
   }
 
   // Fallback to filename for sessionId
