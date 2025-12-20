@@ -80,8 +80,8 @@ function jsonResponse(data: unknown, status = 200): Response {
 // Handlers
 
 async function handleGetDays(req: Request, url: URL): Promise<Response> {
-  const limit = parseInt(url.searchParams.get('limit') || '30');
-  const days = getDays(limit);
+  const limitParam = url.searchParams.get('limit');
+  const days = limitParam ? getDays(parseInt(limitParam)) : getDays();
   return jsonResponse(days);
 }
 
