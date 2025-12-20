@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Folder, FileCode } from 'lucide-react';
+import { Folder, FileCode, Wrench } from 'lucide-react';
 
 interface SessionDetail {
   sessionId: string;
@@ -26,10 +26,12 @@ export default function ProjectCard({ project, isNew }: Props) {
   const aggregated = useMemo(() => {
     const allAccomplishments: string[] = [];
     const allFiles = new Set<string>();
+    const allTools = new Set<string>();
 
     for (const session of project.sessions) {
       allAccomplishments.push(...session.accomplishments);
       session.filesChanged.forEach((f) => allFiles.add(f));
+      session.toolsUsed.forEach((t) => allTools.add(t));
     }
 
     // Dedupe accomplishments (rough - exact match only)
@@ -38,6 +40,7 @@ export default function ProjectCard({ project, isNew }: Props) {
     return {
       accomplishments: uniqueAccomplishments,
       files: [...allFiles],
+      tools: [...allTools],
     };
   }, [project.sessions]);
 
@@ -78,6 +81,21 @@ export default function ProjectCard({ project, isNew }: Props) {
             {aggregated.files.length > 8 && (
               <span className="text-xs px-2 py-1 text-slate-400">+{aggregated.files.length - 8} more</span>
             )}
+          </div>
+        </div>
+      )}
+
+      {aggregated.tools.length > 0 && (
+        <div className="pt-2 border-t border-gray-100">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 mb-1.5">
+            <Wrench size={12} /> Tools
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {aggregated.tools.map((tool, i) => (
+              <span key={i} className="text-xs px-2 py-1 bg-purple-50 text-purple-600 rounded border border-purple-100">
+                {tool}
+              </span>
+            ))}
           </div>
         </div>
       )}
