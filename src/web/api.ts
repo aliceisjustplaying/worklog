@@ -159,7 +159,7 @@ async function handleUpdateProjectStatus(req: Request, url: URL): Promise<Respon
     return jsonResponse({ error: 'Missing path or status' }, 400);
   }
 
-  const validStatuses: ProjectStatus[] = ['shipped', 'in_progress', 'abandoned', 'one_off', 'experiment'];
+  const validStatuses: ProjectStatus[] = ['shipped', 'in_progress', 'ready_to_ship', 'abandoned', 'ignore', 'one_off', 'experiment'];
   if (!validStatuses.includes(body.status)) {
     return jsonResponse({ error: 'Invalid status' }, 400);
   }
