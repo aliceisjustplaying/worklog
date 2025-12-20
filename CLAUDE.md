@@ -1,6 +1,6 @@
 # Worklog Project
 
-A tool that summarizes Claude Code sessions into a daily worklog.
+A tool that summarizes Claude Code and OpenAI Codex CLI sessions into a daily worklog.
 
 ## Architecture
 
@@ -9,7 +9,15 @@ A tool that summarizes Claude Code sessions into a daily worklog.
 - **Web** (`src/web/`): React frontend + Express API
 - **DB**: SQLite at `data/worklog.db`
 
-Vite dev server (5173) proxies `/api` to backend (3456).
+Run `bun dev` for development (hot reload on :5173, API on :3456).
+
+### Multi-Source Session Support
+
+Both Claude Code and Codex CLI sessions are supported:
+- **Claude**: `~/.claude/projects/{encoded-path}/*.jsonl`
+- **Codex**: `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`
+
+Projects are unified by git root - same repo worked on with both CLIs shows as one project. The `source` column in `session_summaries` tracks origin.
 
 ## Key Design Decisions
 
@@ -26,6 +34,7 @@ The LLM prompts explicitly say "OUTCOMES only, never exploration" to prevent sum
 - **Haiku double-encoding**: Even with `mode: 'tool'`, Haiku sometimes returns double-encoded JSON where the entire response is a string with escaped quotes. The `tryRecoverMalformedResponse()` function in `summarizer.ts` handles this by regex-extracting fields from the malformed output. If you see "Session details unavailable", check the error logs for recoverable data.
 - Kill any stale process on port 3456 before running `bun cli serve`
 - **Monorepo path detection**: Claude's path encoding is lossy (`/` → `-`), so `taper-calculator-apps-web` could mean a dashed name or nested dirs. The code probes the filesystem right-to-left to find which interpretation exists, then uses git root as canonical project.
+- **Codex tool types**: Codex uses both `function_call` AND `custom_tool_call` in response_items. The `apply_patch` tool uses `custom_tool_call`, while `shell_command` uses `function_call`. Both must be handled in `codex-reader.ts`.
 
 ## Summary Quality
 
@@ -42,6 +51,6 @@ bun cli process              # Process new sessions (also regenerates affected d
 bun cli process --week this  # Process this week only
 bun cli regenerate           # Regenerate missing daily summaries
 bun cli regenerate --force   # Regenerate ALL daily summaries
-bun cli serve                # Serve web UI on :3456
-bun dev                      # Vite dev server on :5173
+bun dev                      # Dev server with hot reload (:5173)
+bun cli serve                # Production server (:3456)
 ```
