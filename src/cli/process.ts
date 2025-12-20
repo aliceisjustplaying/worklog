@@ -87,11 +87,11 @@ export async function processCommand(options: ProcessOptions): Promise<{
   // Build date filter
   let dateFilter: { type: 'date'; value: string } | { type: 'range'; start: string; end: string } | null = null;
 
-  if (date) {
+  if (date !== undefined) {
     const targetDate = parseDate(date);
     dateFilter = { type: 'date', value: targetDate };
     console.log(`\n📅 Filtering to date: ${targetDate}\n`);
-  } else if (week) {
+  } else if (week !== undefined) {
     const { start, end } = parseWeek(week);
     dateFilter = { type: 'range', start, end };
     console.log(`\n📅 Filtering to week: ${start} to ${end}\n`);
@@ -103,7 +103,7 @@ export async function processCommand(options: ProcessOptions): Promise<{
 
   // Pre-filter by file modification time if date filter is set
   // This avoids parsing thousands of files just to check their dates
-  if (dateFilter && sessions.length > 0) {
+  if (dateFilter !== null && sessions.length > 0) {
     const originalCount = sessions.length;
     const bufferDays = 2; // Allow some buffer for timezone/edge cases
 
@@ -124,7 +124,7 @@ export async function processCommand(options: ProcessOptions): Promise<{
       s.modifiedAt >= startDate && s.modifiedAt <= endDate
     );
 
-    console.log(`Pre-filtered ${originalCount} → ${sessions.length} sessions by modification time\n`);
+    console.log(`Pre-filtered ${String(originalCount)} → ${String(sessions.length)} sessions by modification time\n`);
   }
 
   if (sessions.length === 0) {
@@ -132,15 +132,15 @@ export async function processCommand(options: ProcessOptions): Promise<{
     return { sessionsProcessed: 0, errors: 0 };
   }
 
-  console.log(`Found ${sessions.length} session(s) to check\n`);
+  console.log(`Found ${String(sessions.length)} session(s) to check\n`);
 
   // Process sessions in parallel with concurrency limit
   const CONCURRENCY = 10;
-  const results: Array<{
+  const results: {
     session: SessionFile;
     result?: Awaited<ReturnType<typeof processSession>>;
     error?: unknown;
-  }> = [];
+  }[] = [];
 
   // Process in batches
   for (let i = 0; i < sessions.length; i += CONCURRENCY) {
@@ -165,25 +165,36 @@ export async function processCommand(options: ProcessOptions): Promise<{
   const datesProcessed = new Set<string>();
 
   for (const [projectName, projectSessions] of Object.entries(byProject)) {
-    console.log(`📁 ${projectName} (${projectSessions.length} sessions)`);
+    console.log(`📁 ${projectName} (${String(projectSessions.length)} sessions)`);
 
     let skipped = 0;
     let filtered = 0;
 
     for (const session of projectSessions) {
       const resultEntry = results.find((r) => r.session === session);
-      if (!resultEntry) continue;
+      if (resultEntry === undefined) continue;
 
-      if (resultEntry.error) {
+      if (resultEntry.error !== undefined) {
         errors++;
-        console.log(`  ✗ ${session.sessionId.slice(0, 8)}... - Error: ${resultEntry.error}`);
+        let errorMessage: string;
+        if (resultEntry.error instanceof Error) {
+          errorMessage = resultEntry.error.message;
+        } else if (typeof resultEntry.error === 'object' && resultEntry.error !== null) {
+          errorMessage = JSON.stringify(resultEntry.error);
+        } else if (typeof resultEntry.error === 'string') {
+          errorMessage = resultEntry.error;
+        } else {
+          errorMessage = 'Unknown error';
+        }
+        console.log(`  ✗ ${session.sessionId.slice(0, 8)}... - Error: ${errorMessage}`);
         if (verbose) {
           console.error(resultEntry.error);
         }
         continue;
       }
 
-      const result = resultEntry.result!;
+      const result = resultEntry.result;
+      if (result === undefined) continue;
 
       if (result.filtered) {
         filtered++;
@@ -198,9 +209,7 @@ export async function processCommand(options: ProcessOptions): Promise<{
         continue;
       }
 
-      if (result.date) {
-        datesProcessed.add(result.date);
-      }
+      datesProcessed.add(result.date);
       processed++;
 
       const duration = formatDuration(result.startTime, result.endTime);
@@ -208,9 +217,9 @@ export async function processCommand(options: ProcessOptions): Promise<{
       console.log(`  ✓ ${session.sessionId.slice(0, 8)}... (${duration}) → "${summary}..."`);
     }
 
-    const notes = [];
-    if (skipped > 0) notes.push(`${skipped} empty`);
-    if (filtered > 0) notes.push(`${filtered} outside date range`);
+    const notes: string[] = [];
+    if (skipped > 0) notes.push(`${String(skipped)} empty`);
+    if (filtered > 0) notes.push(`${String(filtered)} outside date range`);
     if (notes.length > 0) {
       console.log(`  (${notes.join(', ')} skipped)`);
     }
@@ -221,7 +230,7 @@ export async function processCommand(options: ProcessOptions): Promise<{
   console.log('📝 Generating daily summaries...\n');
   await regenerateSummariesForDates(datesProcessed, verbose);
 
-  console.log(`\n✅ Done! Processed ${processed} sessions (${errors} errors)\n`);
+  console.log(`\n✅ Done! Processed ${String(processed)} sessions (${String(errors)} errors)\n`);
   console.log('Run `bun cli serve` to view your worklog.\n');
 
   return { sessionsProcessed: processed, errors };
@@ -255,7 +264,7 @@ async function processSession(
       );
 
   if (verbose) {
-    console.log(`    Parsed: ${parsed.messages.length} messages, ${Object.keys(parsed.stats.toolCalls).length} tool types`);
+    console.log(`    Parsed: ${String(parsed.messages.length)} messages, ${String(Object.keys(parsed.stats.toolCalls).length)} tool types`);
   }
 
   // Check date filter BEFORE expensive LLM summarization
@@ -304,7 +313,7 @@ async function processSession(
 
   if (verbose) {
     console.log(`    Summary: ${summary.shortSummary}`);
-    console.log(`    Accomplishments: ${summary.accomplishments.length}`);
+    console.log(`    Accomplishments: ${String(summary.accomplishments.length)}`);
   }
 
   // Filter out sessions that the LLM determined had no real work
@@ -364,14 +373,15 @@ async function regenerateSummariesForDates(
       );
 
       if (verbose) {
-        console.log(`  Generating brag summary for ${date} (${sessions.length} sessions)`);
+        console.log(`  Generating brag summary for ${date} (${String(sessions.length)} sessions)`);
         if (newProjectNames.size > 0) {
           console.log(`    New projects: ${[...newProjectNames].join(', ')}`);
         }
       }
 
-      const bragSummary = await generateDailyBragSummary(date, sessions, newProjectNames);
-      const projectNames = [...new Set(sessions.map((s) => s.project_name))];
+      const filteredNewProjects = new Set([...newProjectNames].filter((n): n is string => n !== null));
+      const bragSummary = await generateDailyBragSummary(date, sessions, filteredNewProjects);
+      const projectNames = [...new Set(sessions.map((s) => s.project_name))].filter((n): n is string => n !== null);
 
       saveDailySummary(date, bragSummary, projectNames, sessions.length);
 
@@ -389,9 +399,7 @@ function groupByProject(
 
   for (const session of sessions) {
     const key = session.projectName;
-    if (!grouped[key]) {
-      grouped[key] = [];
-    }
+    grouped[key] ??= [];
     grouped[key].push(session);
   }
 
@@ -399,16 +407,16 @@ function groupByProject(
 }
 
 function formatDuration(start: string, end: string): string {
-  if (!start || !end) return '?';
+  if (start === '' || end === '') return '?';
 
   const startDate = new Date(start);
   const endDate = new Date(end);
   const diffMs = endDate.getTime() - startDate.getTime();
 
   const minutes = Math.floor(diffMs / 60000);
-  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 60) return `${String(minutes)}m`;
 
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
-  return `${hours}h${remainingMinutes}m`;
+  return `${String(hours)}h${String(remainingMinutes)}m`;
 }

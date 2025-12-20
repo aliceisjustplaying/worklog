@@ -5,6 +5,10 @@ import { getSessionStats } from '../core/session-detector';
 import { getStats, getDatesWithoutBragSummary, getSessionsForDate, saveDailySummary } from '../core/db';
 import { generateDailyBragSummary } from '../core/summarizer';
 
+interface DailySummaryParsed {
+  projects: { name: string; summary: string }[];
+}
+
 const { values, positionals } = parseArgs({
   args: Bun.argv.slice(2),
   options: {
@@ -20,7 +24,7 @@ const { values, positionals } = parseArgs({
 const command = positionals[0];
 
 async function main() {
-  if (values.help || !command) {
+  if (values.help === true || !command) {
     printHelp();
     return;
   }
@@ -36,7 +40,7 @@ async function main() {
       break;
 
     case 'status':
-      await statusCommand();
+      statusCommand();
       break;
 
     case 'serve':
@@ -86,26 +90,26 @@ Examples:
 `);
 }
 
-async function statusCommand() {
+function statusCommand() {
   const sessionStats = getSessionStats();
   const dbStats = getStats();
 
   console.log('\n📊 Worklog Status\n');
   console.log('Session Files:');
-  console.log(`  Total files: ${sessionStats.totalFiles}`);
-  console.log(`  Projects: ${sessionStats.totalProjects}`);
+  console.log(`  Total files: ${String(sessionStats.totalFiles)}`);
+  console.log(`  Projects: ${String(sessionStats.totalProjects)}`);
   console.log(`  Claude paths: ${sessionStats.claudePaths.join(', ')}`);
   console.log('\nProcessed Data:');
-  console.log(`  Sessions summarized: ${dbStats.totalSessions}`);
-  console.log(`  Days with work: ${dbStats.totalDays}`);
-  console.log(`  Projects tracked: ${dbStats.totalProjects}`);
+  console.log(`  Sessions summarized: ${String(dbStats.totalSessions)}`);
+  console.log(`  Days with work: ${String(dbStats.totalDays)}`);
+  console.log(`  Projects tracked: ${String(dbStats.totalProjects)}`);
   console.log('');
 }
 
 async function serveCommand() {
   // Dynamic import to avoid loading web server code unless needed
   const { startServer } = await import('../web/server');
-  await startServer();
+  startServer();
 }
 
 async function regenerateCommand(force: boolean) {
@@ -126,7 +130,7 @@ async function regenerateCommand(force: boolean) {
     return;
   }
 
-  console.log(`\n📝 Regenerating ${dates.length} daily summaries...\n`);
+  console.log(`\n📝 Regenerating ${String(dates.length)} daily summaries...\n`);
 
   for (const date of dates) {
     const sessions = getSessionsForDate(date);
@@ -134,22 +138,24 @@ async function regenerateCommand(force: boolean) {
 
     try {
       const summary = await generateDailyBragSummary(date, sessions);
-      const projectNames = [...new Set(sessions.map(s => s.project_name))];
+      const projectNames = [...new Set(sessions.map(s => s.project_name))].filter((n): n is string => n !== null);
       saveDailySummary(date, summary, projectNames, sessions.length);
 
       // Parse and show preview
-      const parsed = JSON.parse(summary);
-      const preview = parsed.projects.map((p: any) => p.name).join(', ');
+      const parsed = JSON.parse(summary) as DailySummaryParsed;
+      const preview = parsed.projects.map((p) => p.name).join(', ');
       console.log(`  ✓ ${date}: ${preview}`);
-    } catch (error) {
-      console.error(`  ✗ ${date}: ${error}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`  ✗ ${date}: ${errorMessage}`);
     }
   }
 
   console.log('\n✅ Done!\n');
 }
 
-main().catch((error) => {
-  console.error('Error:', error);
+main().catch((error: unknown) => {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  console.error('Error:', errorMessage);
   process.exit(1);
 });
