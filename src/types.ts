@@ -77,8 +77,8 @@ export interface SessionStats {
   userMessages: number;
   assistantMessages: number;
   toolCalls: Record<string, number>;
-  totalInputTokens: number;
-  totalOutputTokens: number;
+  totalInputTokens?: number;
+  totalOutputTokens?: number;
 }
 
 // LLM-generated summary
@@ -94,16 +94,16 @@ export interface DBSessionSummary {
   id: number;
   session_id: string;
   project_path: string;
-  project_name: string;
-  git_branch: string;
+  project_name: string | null;
+  git_branch: string | null;
   start_time: string;
   end_time: string;
   date: string;
-  short_summary: string;
-  accomplishments: string; // JSON array
-  tools_used: string; // JSON array
-  files_changed: string; // JSON array
-  stats: string; // JSON object
+  short_summary: string | null;
+  accomplishments: string | null; // JSON array
+  tools_used: string | null; // JSON array
+  files_changed: string | null; // JSON array
+  stats: string | null; // JSON object
   source: SessionSource; // claude or codex
   processed_at: string;
 }
