@@ -189,7 +189,7 @@ export function saveDailySummary(
 }
 
 // Query functions for API
-export function getDays(limit = 30): DayListItem[] {
+export function getDays(limit = 365): DayListItem[] {
   const database = getDb();
   const rows = database.query<
     { date: string; project_count: number; session_count: number },
