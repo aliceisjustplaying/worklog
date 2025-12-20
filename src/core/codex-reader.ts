@@ -5,7 +5,7 @@ import type { ParsedSession, ParsedMessage, ToolUse, SessionStats } from '../typ
 // Codex JSONL entry types
 interface CodexEntry {
   timestamp: string;
-  type: 'session_meta' | 'event_msg' | 'response_item' | 'turn_context';
+  type: 'session_meta' | 'event_msg' | 'response_item' | 'turn_context' | 'message' | 'function_call';
   payload: unknown;
 }
 
