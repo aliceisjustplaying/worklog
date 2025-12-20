@@ -1,3 +1,17 @@
+// Session source discriminator
+export type SessionSource = 'claude' | 'codex';
+
+// Session file discovered by detector
+export interface SessionFile {
+  path: string;
+  projectPath: string;
+  projectName: string;
+  sessionId: string;
+  modifiedAt: Date;
+  fileHash: string;
+  source: SessionSource;
+}
+
 // Raw JSONL entry from Claude Code session files
 export interface RawSessionEntry {
   type: 'user' | 'assistant';
@@ -90,6 +104,7 @@ export interface DBSessionSummary {
   tools_used: string; // JSON array
   files_changed: string; // JSON array
   stats: string; // JSON object
+  source: SessionSource; // claude or codex
   processed_at: string;
 }
 
@@ -151,4 +166,35 @@ export interface SessionDetail {
   filesChanged: string[];
   toolsUsed: string[];
   stats: SessionStats;
+}
+
+// Project status tracking
+// Extensible - add more statuses here as needed
+export type ProjectStatus =
+  | 'shipped'
+  | 'in_progress'
+  | 'abandoned'
+  | 'one_off'
+  | 'experiment';
+
+export interface DBProject {
+  id: number;
+  project_path: string;
+  project_name: string;
+  status: ProjectStatus;
+  first_session_date: string;
+  last_session_date: string;
+  total_sessions: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectListItem {
+  path: string;
+  name: string;
+  status: ProjectStatus;
+  firstSessionDate: string;
+  lastSessionDate: string;
+  totalSessions: number;
+  daysSinceLastSession: number;
 }

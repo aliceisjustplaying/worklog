@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "cli": "bun run src/cli/index.ts",
-    "dev": "bun run src/cli/index.ts serve & vite",
-    "dev:grab": "bunx @react-grab/claude-code@latest & bun run dev",
+    "dev": "bun run scripts/dev.ts",
     "build": "vite build",
     "serve": "bun run src/cli/index.ts serve"
   },

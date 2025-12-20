@@ -1,5 +1,7 @@
-import { findUnprocessedSessions, type SessionFile } from '../core/session-detector';
+import { findUnprocessedSessions } from '../core/session-detector';
 import { parseSessionFile } from '../core/session-reader';
+import { parseCodexSessionFile } from '../core/codex-reader';
+import type { SessionFile } from '../types';
 import { summarizeSession, generateDailyBragSummary } from '../core/summarizer';
 import {
   markFileProcessed,
@@ -8,6 +10,7 @@ import {
   getDatesWithoutBragSummary,
   getSessionsForDate,
   getNewProjectsForDate,
+  upsertProjectFromSession,
 } from '../core/db';
 
 interface ProcessOptions {
@@ -238,12 +241,18 @@ async function processSession(
   skipped: boolean;
   filtered: boolean;
 }> {
-  // Parse the session file
-  const parsed = await parseSessionFile(
-    sessionFile.path,
-    sessionFile.projectPath,
-    sessionFile.projectName
-  );
+  // Parse the session file (dispatch based on source)
+  const parsed = sessionFile.source === 'codex'
+    ? await parseCodexSessionFile(
+        sessionFile.path,
+        sessionFile.projectPath,
+        sessionFile.projectName
+      )
+    : await parseSessionFile(
+        sessionFile.path,
+        sessionFile.projectPath,
+        sessionFile.projectName
+      );
 
   if (verbose) {
     console.log(`    Parsed: ${parsed.messages.length} messages, ${Object.keys(parsed.stats.toolCalls).length} tool types`);
@@ -317,7 +326,8 @@ async function processSession(
   }
 
   // Save to database
-  saveSessionSummary(parsed, summary);
+  saveSessionSummary(parsed, summary, sessionFile.source);
+  upsertProjectFromSession(parsed.projectPath, parsed.projectName, parsed.date);
   markFileProcessed(sessionFile.path, sessionFile.fileHash);
 
   return {

@@ -1,6 +1,6 @@
 # Worklog
 
-Automatically generates a daily worklog from your Claude Code sessions. See what you actually accomplished, not what you looked at.
+Automatically generates a daily worklog from your Claude Code and OpenAI Codex CLI sessions. See what you actually accomplished, not what you looked at.
 
 <p>
   <img src="screenshot1.png" width="49%" />
@@ -12,11 +12,12 @@ Automatically generates a daily worklog from your Claude Code sessions. See what
 
 ## What it does
 
-- Scans Claude Code session files from `~/.claude/projects/`
+- Scans session files from Claude Code (`~/.claude/projects/`) and Codex CLI (`~/.codex/sessions/`)
 - Filters to only sessions where code was actually changed (Write/Edit)
 - Summarizes each session using Claude Haiku
 - Generates daily summaries grouped by project
 - Provides a web UI to browse your work history
+- Unifies projects by git root - same repo worked on with both CLIs shows as one project
 
 ## Setup
 
@@ -39,11 +40,10 @@ Then open http://localhost:5173
 ## Commands
 
 ```bash
-bun cli process              # Process new sessions
+bun cli process              # Process new sessions (verbose by default)
 bun cli process --force      # Reprocess all sessions
 bun cli process -d today     # Process today only
 bun cli process -w thisweek  # Process this week only
-bun cli process -v           # Verbose output (show parsing details)
 bun cli status               # Show stats
 bun cli serve                # Production server on :3456
 bun cli regenerate           # Regenerate daily summaries
@@ -60,7 +60,11 @@ bun cli regenerate --force   # Regenerate all daily summaries
 
 ## How it works
 
-**Session location**: Looks for Claude Code sessions in `~/.claude/projects/` and `~/.config/claude/projects/`. To use a custom path, set `CLAUDE_CONFIG_DIR` (comma-separated for multiple). See `getClaudePaths()` in `src/core/session-detector.ts`.
+**Session location**: Looks for sessions in:
+- Claude Code: `~/.claude/projects/` and `~/.config/claude/projects/`
+- Codex CLI: `~/.codex/sessions/YYYY/MM/DD/`
+
+To use a custom Claude path, set `CLAUDE_CONFIG_DIR` (comma-separated for multiple). See `src/core/session-detector.ts` and `src/core/codex-detector.ts`.
 
 **Project path detection**: Claude encodes paths with dashes (`-Users-USERNAME-src-a-myproject`), which is lossy. The tool has special handling for:
 - `~/src/a/` - active projects

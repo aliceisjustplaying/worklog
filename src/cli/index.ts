@@ -29,7 +29,7 @@ async function main() {
     case 'process':
       await processCommand({
         force: values.force ?? false,
-        verbose: values.verbose ?? false,
+        verbose: values.verbose ?? true, // Default to verbose
         date: values.date,
         week: values.week,
       });
