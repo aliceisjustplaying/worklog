@@ -122,6 +122,17 @@ export interface DBProcessedFile {
   processed_at: string;
 }
 
+// Project types
+export type ProjectStatus = 'shipped' | 'in_progress' | 'abandoned' | 'one_off' | 'experiment';
+
+export interface ProjectListItem {
+  path: string;
+  name: string;
+  status: ProjectStatus;
+  totalSessions: number;
+  daysSinceLastSession: number;
+}
+
 // API response types
 export interface DayListItem {
   date: string;

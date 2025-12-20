@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, ChevronRight, Layers, Clock } from 'lucide-react';
 import { useDays } from '../hooks/useWorklog';
-import type { DayListItem } from '../../../../types';
+import type { DayListItem } from '../../../types';
 
 // Get ISO week number
 function getWeekNumber(date: Date): number {
