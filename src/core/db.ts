@@ -12,6 +12,8 @@ import type {
   DayDetail,
   ProjectDetail,
   SessionDetail,
+  ProjectStatus,
+  ProjectListItem,
 } from '../types';
 
 const DATA_DIR = join(import.meta.dir, '../../data');
@@ -307,4 +309,54 @@ export function getNewProjectsForDate(date: string): string[] {
   return projectsOnDate
     .filter((p) => isNewProject(p.project_path, date))
     .map((p) => p.project_path);
+}
+
+// Project management
+export function getProjects(status?: ProjectStatus): ProjectListItem[] {
+  const database = getDb();
+  const today = new Date().toISOString().split('T')[0];
+
+  const query = status
+    ? `SELECT * FROM projects WHERE status = ? ORDER BY last_session_date DESC`
+    : `SELECT * FROM projects ORDER BY last_session_date DESC`;
+
+  const rows = status
+    ? database.query<{
+        project_path: string;
+        project_name: string;
+        status: string;
+        total_sessions: number;
+        last_session_date: string;
+      }, [string]>(query).all(status)
+    : database.query<{
+        project_path: string;
+        project_name: string;
+        status: string;
+        total_sessions: number;
+        last_session_date: string;
+      }, []>(query).all();
+
+  return rows.map((row) => {
+    const lastDate = new Date(row.last_session_date);
+    const todayDate = new Date(today);
+    const diffTime = todayDate.getTime() - lastDate.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    return {
+      path: row.project_path,
+      name: row.project_name,
+      status: row.status as ProjectStatus,
+      totalSessions: row.total_sessions,
+      daysSinceLastSession: diffDays,
+    };
+  });
+}
+
+export function updateProjectStatus(projectPath: string, status: ProjectStatus): boolean {
+  const database = getDb();
+  const result = database.run(
+    `UPDATE projects SET status = ?, updated_at = ? WHERE project_path = ?`,
+    [status, new Date().toISOString(), projectPath]
+  );
+  return result.changes > 0;
 }
