@@ -433,8 +433,9 @@ export function upsertProjectFromSession(
     VALUES (?, ?, 'in_progress', ?, ?, 1, ?, ?)
     ON CONFLICT(project_path) DO UPDATE SET
       project_name = COALESCE(NULLIF(excluded.project_name, ''), project_name),
+      first_session_date = MIN(first_session_date, excluded.first_session_date),
       last_session_date = MAX(last_session_date, excluded.last_session_date),
-      total_sessions = total_sessions + 1,
+      total_sessions = (SELECT COUNT(*) FROM session_summaries WHERE project_path = excluded.project_path),
       updated_at = excluded.updated_at
   `,
     [projectPath, projectName, sessionDate, sessionDate, now, now]

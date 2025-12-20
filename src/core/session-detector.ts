@@ -380,7 +380,7 @@ export function getSessionStats(): {
   totalProjects: number;
   claudePaths: string[];
 } {
-  const allSessions = findAllSessionFiles();
+  const allSessions = findAllSessions();
   const projects = new Set(allSessions.map((s) => s.projectPath));
 
   return {
