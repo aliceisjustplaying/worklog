@@ -3,13 +3,15 @@ import { homedir } from 'os';
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
 import { createHash } from 'crypto';
 import { isFileProcessed } from './db';
+import { findAllCodexSessionFiles } from './codex-detector';
+import type { SessionFile } from '../types';
 
 /**
  * Find the git root for a given path.
  * Returns the path if it's a git root, or walks up to find one.
  * Returns null if no git root is found.
  */
-function findGitRoot(path: string): string | null {
+export function findGitRoot(path: string): string | null {
   let current = path;
   const root = '/';
 
@@ -25,14 +27,6 @@ function findGitRoot(path: string): string | null {
   return null;
 }
 
-export interface SessionFile {
-  path: string;
-  projectPath: string;
-  projectName: string;
-  sessionId: string;
-  modifiedAt: Date;
-  fileHash: string;
-}
 
 /**
  * Get possible Claude config directories
@@ -302,6 +296,7 @@ export function findAllSessionFiles(): SessionFile[] {
           sessionId,
           modifiedAt: fileStat.mtime,
           fileHash: '', // Computed lazily
+          source: 'claude',
         });
       }
     }
@@ -319,7 +314,7 @@ export function findAllSessionFiles(): SessionFile[] {
 export async function findUnprocessedSessions(
   force = false
 ): Promise<SessionFile[]> {
-  const allSessions = findAllSessionFiles();
+  const allSessions = findAllSessions();
 
   if (force) {
     // Compute hashes for all files
@@ -362,6 +357,19 @@ export function filterSessionsByDate(
   // We need to peek into files to check dates, but that's expensive
   // For now, return all and let the processor filter
   return sessions;
+}
+
+/**
+ * Find all sessions from all supported sources (Claude + Codex)
+ */
+export function findAllSessions(): SessionFile[] {
+  const claudeSessions = findAllSessionFiles();
+  const codexSessions = findAllCodexSessionFiles();
+
+  const all = [...claudeSessions, ...codexSessions];
+  all.sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime());
+
+  return all;
 }
 
 /**
