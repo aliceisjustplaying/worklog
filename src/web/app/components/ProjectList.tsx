@@ -159,7 +159,7 @@ export default function ProjectList() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold text-slate-800">Projects</h2>
         <span className="text-sm text-slate-500">{allProjects.length} total</span>

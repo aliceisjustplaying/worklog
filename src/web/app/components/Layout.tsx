@@ -22,7 +22,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-gray-50 text-slate-900 font-sans">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10 bg-opacity-90 backdrop-blur-sm">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-[1050px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group">
             <div className="bg-blue-600 p-1.5 rounded-lg text-white group-hover:bg-blue-700 transition-colors">
               <Calendar size={20} />
@@ -66,7 +66,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4">{children}</main>
+      <main className="max-w-[1050px] mx-auto px-4 sm:px-6 lg:px-8 py-4">{children}</main>
     </div>
   );
 }
