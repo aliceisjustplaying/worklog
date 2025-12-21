@@ -5,19 +5,38 @@ import { useDayDetail } from '../hooks/useWorklog';
 import BragSummary from './BragSummary';
 import ProjectCard from './ProjectCard';
 
+interface ParsedProject {
+  name: string;
+  isNew?: boolean;
+}
+
+interface ParsedBragSummary {
+  projects: ParsedProject[];
+}
+
 // Parse brag summary to extract isNew flags by project name
 function parseNewProjects(bragSummary: string | undefined): Set<string> {
-  if (!bragSummary) return new Set();
+  if (bragSummary === undefined) return new Set();
   try {
-    const parsed = JSON.parse(bragSummary);
-    if (parsed.projects && Array.isArray(parsed.projects)) {
-      return new Set(
-        parsed.projects
-          .filter((p: { isNew?: boolean }) => p.isNew)
-          .map((p: { name: string }) => p.name)
-      );
+    const parsed = JSON.parse(bragSummary) as unknown;
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'projects' in parsed &&
+      Array.isArray(parsed.projects)
+    ) {
+      const typedParsed = parsed as ParsedBragSummary;
+      const names: string[] = [];
+      for (const p of typedParsed.projects) {
+        if (p.isNew === true) {
+          names.push(p.name);
+        }
+      }
+      return new Set(names);
     }
-  } catch {}
+  } catch {
+    // JSON parsing failed, return empty set
+  }
   return new Set();
 }
 
@@ -31,7 +50,8 @@ export default function DayView() {
   );
 
   if (loading) return <div className="text-center py-20 text-slate-400">Loading day details...</div>;
-  if (error || !day) return <div className="text-center py-20 text-red-500">Error: {error || 'Day not found'}</div>;
+  if (error !== null) return <div className="text-center py-20 text-red-500">Error: {error}</div>;
+  if (day === null) return <div className="text-center py-20 text-red-500">Error: Day not found</div>;
 
   const formattedDate = new Date(day.date).toLocaleDateString(undefined, {
     weekday: 'long',
@@ -50,7 +70,7 @@ export default function DayView() {
         <h1 className="text-2xl font-bold text-slate-900">{formattedDate}</h1>
       </div>
 
-      {day.bragSummary && <BragSummary summary={day.bragSummary} />}
+      {day.bragSummary !== undefined && day.bragSummary.length > 0 && <BragSummary summary={day.bragSummary} />}
 
       <div className="space-y-3">
         {day.projects.map((project) => (

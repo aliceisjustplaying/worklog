@@ -9,10 +9,11 @@ export function useProjects(status?: ProjectStatus) {
   const fetchProjects = useCallback(async () => {
     try {
       setLoading(true);
-      const url = status ? `/api/projects?status=${status}` : '/api/projects';
+      const url = status !== undefined ? `/api/projects?status=${status}` : '/api/projects';
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to fetch projects');
-      setProjects(await res.json());
+      const data: unknown = await res.json();
+      setProjects(data as ProjectListItem[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -21,7 +22,7 @@ export function useProjects(status?: ProjectStatus) {
   }, [status]);
 
   useEffect(() => {
-    fetchProjects();
+    void fetchProjects();
   }, [fetchProjects]);
 
   return { projects, loading, error, refetch: fetchProjects };

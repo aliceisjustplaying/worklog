@@ -52,7 +52,7 @@ function StatusBadge({
               return (
                 <button
                   key={s}
-                  onClick={() => onSelect(s)}
+                  onClick={() => { onSelect(s); }}
                   className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 hover:bg-gray-50 ${
                     s === status ? 'bg-gray-50' : ''
                   }`}
@@ -73,11 +73,13 @@ function ProjectRow({ project, onStatusChange }: { project: ProjectListItem; onS
   const [showDropdown, setShowDropdown] = useState(false);
   const { updateStatus } = useUpdateProjectStatus();
 
-  const handleStatusSelect = async (newStatus: ProjectStatus) => {
+  const handleStatusSelect = (newStatus: ProjectStatus) => {
     setShowDropdown(false);
     if (newStatus !== project.status) {
-      await updateStatus(project.path, newStatus);
-      onStatusChange();
+      void (async () => {
+        await updateStatus(project.path, newStatus);
+        onStatusChange();
+      })();
     }
   };
 
@@ -96,7 +98,7 @@ function ProjectRow({ project, onStatusChange }: { project: ProjectListItem; onS
             <span className="text-slate-300">|</span>
             <span className={`flex items-center gap-1 ${isStale ? 'text-amber-600' : ''}`}>
               {isStale && <Clock size={12} />}
-              {project.daysSinceLastSession === 0 ? 'Today' : `${project.daysSinceLastSession}d ago`}
+              {project.daysSinceLastSession === 0 ? 'Today' : `${String(project.daysSinceLastSession)}d ago`}
             </span>
           </div>
         </div>
@@ -104,10 +106,10 @@ function ProjectRow({ project, onStatusChange }: { project: ProjectListItem; onS
 
       <StatusBadge
         status={project.status}
-        onClick={() => setShowDropdown(!showDropdown)}
+        onClick={() => { setShowDropdown(!showDropdown); }}
         showDropdown={showDropdown}
         onSelect={handleStatusSelect}
-        onClose={() => setShowDropdown(false)}
+        onClose={() => { setShowDropdown(false); }}
       />
     </div>
   );
@@ -137,7 +139,7 @@ export default function ProjectList() {
     return <div className="text-center py-20 text-slate-400">Loading projects...</div>;
   }
 
-  if (error) {
+  if (error !== null) {
     return <div className="text-center py-20 text-red-500">Error: {error}</div>;
   }
 
@@ -154,7 +156,7 @@ export default function ProjectList() {
           label="All"
           count={allProjects.length}
           isActive={filter === 'all'}
-          onClick={() => setFilter('all')}
+          onClick={() => { setFilter('all'); }}
         />
         {ALL_STATUSES.map((s) => (
           <FilterTab
@@ -162,7 +164,7 @@ export default function ProjectList() {
             label={STATUS_CONFIG[s].label}
             count={counts[s]}
             isActive={filter === s}
-            onClick={() => setFilter(s)}
+            onClick={() => { setFilter(s); }}
           />
         ))}
       </div>
@@ -170,7 +172,7 @@ export default function ProjectList() {
       {/* Stale projects callout */}
       {staleCount > 0 && filter !== 'shipped' && filter !== 'ready_to_ship' && filter !== 'abandoned' && filter !== 'ignore' && filter !== 'one_off' && filter !== 'experiment' && (
         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-          <strong>{staleCount} project{staleCount > 1 ? 's' : ''}</strong> marked "In Progress" but untouched for 30+ days.
+          <strong>{String(staleCount)} project{staleCount > 1 ? 's' : ''}</strong> marked "In Progress" but untouched for 30+ days.
         </div>
       )}
 
@@ -181,7 +183,7 @@ export default function ProjectList() {
       ) : (
         <div className="space-y-2">
           {projects.map((project) => (
-            <ProjectRow key={project.path} project={project} onStatusChange={refetch} />
+            <ProjectRow key={project.path} project={project} onStatusChange={() => { void refetch(); }} />
           ))}
         </div>
       )}
@@ -212,7 +214,7 @@ function FilterTab({
       {label}
       {count > 0 && (
         <span className={`ml-1.5 ${isActive ? 'text-slate-500' : 'text-slate-400'}`}>
-          {count}
+          {String(count)}
         </span>
       )}
     </button>

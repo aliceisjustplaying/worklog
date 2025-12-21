@@ -11,8 +11,13 @@ interface DailySummary {
 
 function parseSummary(summary: string): DailySummary | null {
   try {
-    const parsed = JSON.parse(summary);
-    if (parsed.projects && Array.isArray(parsed.projects)) {
+    const parsed = JSON.parse(summary) as unknown;
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'projects' in parsed &&
+      Array.isArray(parsed.projects)
+    ) {
       return parsed as DailySummary;
     }
   } catch {
@@ -28,15 +33,15 @@ export default function BragSummary({ summary }: Props) {
 
   const handleCopy = () => {
     // Copy as readable text
-    const text = parsed
+    const text = parsed !== null
       ? parsed.projects.map(p => `${p.name}: ${p.summary}`).join('\n')
       : summary;
-    navigator.clipboard.writeText(text);
+    void navigator.clipboard.writeText(text);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => { setCopied(false); }, 2000);
   };
 
-  if (!summary) return null;
+  if (summary.length === 0) return null;
 
   return (
     <div className="relative group rounded-lg p-4 mb-4 bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 shadow-sm">
@@ -61,7 +66,7 @@ export default function BragSummary({ summary }: Props) {
               {parsed.projects.map((project, i) => (
                 <li key={i} className="text-sm">
                   <span className="font-semibold text-slate-800">{project.name}</span>
-                  {project.isNew && (
+                  {project.isNew === true && (
                     <span className="ml-1.5 px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">NEW</span>
                   )}
                   <span className="text-slate-800">:</span>{' '}

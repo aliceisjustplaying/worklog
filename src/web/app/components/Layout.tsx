@@ -7,10 +7,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { stats, refetch: refetchStats } = useStats();
   const { refresh, refreshing } = useRefresh();
 
-  const handleRefresh = async () => {
-    await refresh();
-    refetchStats();
-    window.location.reload();
+  const handleRefresh = () => {
+    void refresh()
+      .then(() => {
+        void refetchStats();
+        window.location.reload();
+      })
+      .catch((err: unknown) => {
+        console.error('Refresh failed:', err);
+      });
   };
 
   return (
@@ -33,15 +38,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <span className="hidden sm:inline">Projects</span>
             </Link>
 
-            {stats && (
+            {stats !== null && (
               <div className="hidden sm:flex gap-4 text-sm text-slate-500">
                 <div className="flex items-center gap-1.5">
                   <Activity size={16} className="text-blue-500" />
-                  <span className="font-medium text-slate-700">{stats.totalSessions}</span> sessions
+                  <span className="font-medium text-slate-700">{String(stats.totalSessions)}</span> sessions
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Calendar size={16} className="text-blue-500" />
-                  <span className="font-medium text-slate-700">{stats.totalDays}</span> days
+                  <span className="font-medium text-slate-700">{String(stats.totalDays)}</span> days
                 </div>
               </div>
             )}

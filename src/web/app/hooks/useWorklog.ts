@@ -49,8 +49,8 @@ export function useDays() {
       setLoading(true);
       const res = await fetch('/api/days');
       if (!res.ok) throw new Error('Failed to fetch days');
-      const data = await res.json();
-      setDays(data);
+      const data: unknown = await res.json();
+      setDays(data as DayListItem[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -58,7 +58,7 @@ export function useDays() {
     }
   }, []);
 
-  useEffect(() => { fetchDays(); }, [fetchDays]);
+  useEffect(() => { void fetchDays(); }, [fetchDays]);
 
   return { days, loading, error, refetch: fetchDays };
 }
@@ -69,21 +69,21 @@ export function useDayDetail(date: string | undefined) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!date) return;
+    if (date === undefined) return;
     const fetchDay = async () => {
       try {
         setLoading(true);
         const res = await fetch(`/api/days/${date}`);
         if (!res.ok) throw new Error('Failed to fetch day details');
-        const data = await res.json();
-        setDay(data);
+        const data: unknown = await res.json();
+        setDay(data as DayDetail);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
         setLoading(false);
       }
     };
-    fetchDay();
+    void fetchDay();
   }, [date]);
 
   return { day, loading, error };
@@ -95,13 +95,16 @@ export function useStats() {
   const fetchStats = useCallback(async () => {
     try {
       const res = await fetch('/api/stats');
-      if (res.ok) setStats(await res.json());
+      if (res.ok) {
+        const data: unknown = await res.json();
+        setStats(data as Stats);
+      }
     } catch (e) {
       console.error(e);
     }
   }, []);
 
-  useEffect(() => { fetchStats(); }, [fetchStats]);
+  useEffect(() => { void fetchStats(); }, [fetchStats]);
   return { stats, refetch: fetchStats };
 }
 

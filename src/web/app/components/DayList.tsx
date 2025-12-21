@@ -41,18 +41,22 @@ function groupDaysByMonthAndWeek(days: DayListItem[]): GroupedDays[] {
 
   for (const day of days) {
     const date = new Date(day.date + 'T12:00:00'); // Noon to avoid timezone issues
-    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const monthKey = `${String(date.getFullYear())}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     const weekNum = getWeekNumber(date);
-    const weekKey = `${date.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+    const weekKey = `${String(date.getFullYear())}-W${String(weekNum).padStart(2, '0')}`;
 
     if (!grouped.has(monthKey)) {
       grouped.set(monthKey, new Map());
     }
-    const monthMap = grouped.get(monthKey)!;
+    const monthMap = grouped.get(monthKey);
+    if (monthMap === undefined) continue;
     if (!monthMap.has(weekKey)) {
       monthMap.set(weekKey, []);
     }
-    monthMap.get(weekKey)!.push(day);
+    const weekDays = monthMap.get(weekKey);
+    if (weekDays !== undefined) {
+      weekDays.push(day);
+    }
   }
 
   const result: GroupedDays[] = [];
@@ -127,11 +131,11 @@ function DayCard({ day }: { day: DayListItem }) {
             <div className="flex items-center gap-3 text-xs text-slate-500">
               <div className="flex items-center gap-1.5">
                 <Layers size={14} />
-                <span>{day.projectCount} Projects</span>
+                <span>{String(day.projectCount)} Projects</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Clock size={14} />
-                <span>{day.sessionCount} Sessions</span>
+                <span>{String(day.sessionCount)} Sessions</span>
               </div>
             </div>
           </div>
@@ -146,7 +150,7 @@ export default function DayList() {
   const { days, loading, error } = useDays();
 
   if (loading) return <div className="text-center py-20 text-slate-400">Loading your history...</div>;
-  if (error) return <div className="text-center py-20 text-red-500">Error: {error}</div>;
+  if (error !== null) return <div className="text-center py-20 text-red-500">Error: {error}</div>;
 
   if (days.length === 0) {
     return (

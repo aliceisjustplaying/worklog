@@ -51,7 +51,7 @@ export default function ProjectCard({ project, isNew }: Props) {
           <Folder size={16} />
         </div>
         <h3 className="text-sm font-bold text-slate-800">{project.name}</h3>
-        {isNew && (
+        {isNew === true && (
           <span className="px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">NEW</span>
         )}
       </div>
