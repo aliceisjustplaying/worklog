@@ -59,19 +59,26 @@ export async function parseSessionFile(
     seen.add(entry.uuid);
 
     // Extract metadata from first entry
-    if (sessionId === '') {
+    if (sessionId === '' && typeof entry.sessionId === 'string' && entry.sessionId !== '') {
       sessionId = entry.sessionId;
     }
     if (gitBranch === '' && entry.gitBranch !== undefined) {
       gitBranch = entry.gitBranch;
     }
 
-    // Track timestamps
-    if (startTime === '' || entry.timestamp < startTime) {
-      startTime = entry.timestamp;
+    // Track timestamps (only if valid)
+    if (entry.timestamp && typeof entry.timestamp === 'string') {
+      if (startTime === '' || entry.timestamp < startTime) {
+        startTime = entry.timestamp;
+      }
+      if (endTime === '' || entry.timestamp > endTime) {
+        endTime = entry.timestamp;
+      }
     }
-    if (endTime === '' || entry.timestamp > endTime) {
-      endTime = entry.timestamp;
+
+    // Skip entries without a valid message (malformed JSONL entries)
+    if (!entry.message) {
+      continue;
     }
 
     // Extract token usage from assistant messages
