@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { ProjectStatus, ProjectListItem } from '../../../types';
+import { useCallback, useEffect, useState } from 'react';
+
+import type { ProjectListItem, ProjectStatus } from '../../../types';
 
 export function useProjects(status?: ProjectStatus) {
   const [projects, setProjects] = useState<ProjectListItem[]>([]);

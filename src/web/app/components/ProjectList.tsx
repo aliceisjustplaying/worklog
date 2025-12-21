@@ -1,19 +1,29 @@
+import { Archive, Beaker, ChevronDown, Clock, Construction, EyeOff, Folder, Rocket, Ship, Zap } from 'lucide-react';
 import React, { useState } from 'react';
-import { Folder, Ship, Construction, Archive, Beaker, Zap, Clock, ChevronDown, Rocket, EyeOff } from 'lucide-react';
+
+import type { ProjectListItem, ProjectStatus } from '../../../types';
 import { useProjects, useUpdateProjectStatus } from '../hooks/useProjects';
-import type { ProjectStatus, ProjectListItem } from '../../../types';
 
-const STATUS_CONFIG: Record<ProjectStatus, { icon: React.ElementType; color: string; bgColor: string; label: string }> = {
-  shipped: { icon: Ship, color: 'text-green-600', bgColor: 'bg-green-50', label: 'Shipped' },
-  in_progress: { icon: Construction, color: 'text-blue-600', bgColor: 'bg-blue-50', label: 'In Progress' },
-  ready_to_ship: { icon: Rocket, color: 'text-teal-600', bgColor: 'bg-teal-50', label: 'Ready to Ship' },
-  abandoned: { icon: Archive, color: 'text-gray-500', bgColor: 'bg-gray-100', label: 'Abandoned' },
-  ignore: { icon: EyeOff, color: 'text-slate-400', bgColor: 'bg-slate-100', label: 'Ignore' },
-  one_off: { icon: Zap, color: 'text-amber-600', bgColor: 'bg-amber-50', label: 'One-off' },
-  experiment: { icon: Beaker, color: 'text-purple-600', bgColor: 'bg-purple-50', label: 'Experiment' },
-};
+const STATUS_CONFIG: Record<ProjectStatus, { icon: React.ElementType; color: string; bgColor: string; label: string }> =
+  {
+    shipped: { icon: Ship, color: 'text-green-600', bgColor: 'bg-green-50', label: 'Shipped' },
+    in_progress: { icon: Construction, color: 'text-blue-600', bgColor: 'bg-blue-50', label: 'In Progress' },
+    ready_to_ship: { icon: Rocket, color: 'text-teal-600', bgColor: 'bg-teal-50', label: 'Ready to Ship' },
+    abandoned: { icon: Archive, color: 'text-gray-500', bgColor: 'bg-gray-100', label: 'Abandoned' },
+    ignore: { icon: EyeOff, color: 'text-slate-400', bgColor: 'bg-slate-100', label: 'Ignore' },
+    one_off: { icon: Zap, color: 'text-amber-600', bgColor: 'bg-amber-50', label: 'One-off' },
+    experiment: { icon: Beaker, color: 'text-purple-600', bgColor: 'bg-purple-50', label: 'Experiment' },
+  };
 
-const ALL_STATUSES: ProjectStatus[] = ['shipped', 'in_progress', 'ready_to_ship', 'abandoned', 'ignore', 'one_off', 'experiment'];
+const ALL_STATUSES: ProjectStatus[] = [
+  'shipped',
+  'in_progress',
+  'ready_to_ship',
+  'abandoned',
+  'ignore',
+  'one_off',
+  'experiment',
+];
 
 function StatusBadge({
   status,
@@ -52,7 +62,9 @@ function StatusBadge({
               return (
                 <button
                   key={s}
-                  onClick={() => { onSelect(s); }}
+                  onClick={() => {
+                    onSelect(s);
+                  }}
                   className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 hover:bg-gray-50 ${
                     s === status ? 'bg-gray-50' : ''
                   }`}
@@ -106,10 +118,14 @@ function ProjectRow({ project, onStatusChange }: { project: ProjectListItem; onS
 
       <StatusBadge
         status={project.status}
-        onClick={() => { setShowDropdown(!showDropdown); }}
+        onClick={() => {
+          setShowDropdown(!showDropdown);
+        }}
         showDropdown={showDropdown}
         onSelect={handleStatusSelect}
-        onClose={() => { setShowDropdown(false); }}
+        onClose={() => {
+          setShowDropdown(false);
+        }}
       />
     </div>
   );
@@ -122,18 +138,17 @@ export default function ProjectList() {
   const { projects: allProjects, loading, error, refetch } = useProjects();
 
   // Filter locally instead of via API to keep counts in sync
-  const projects = filter === 'all'
-    ? allProjects
-    : allProjects.filter((p) => p.status === filter);
+  const projects = filter === 'all' ? allProjects : allProjects.filter((p) => p.status === filter);
 
-  const counts = ALL_STATUSES.reduce((acc, s) => {
-    acc[s] = allProjects.filter((p) => p.status === s).length;
-    return acc;
-  }, {} as Record<ProjectStatus, number>);
+  const counts = ALL_STATUSES.reduce(
+    (acc, s) => {
+      acc[s] = allProjects.filter((p) => p.status === s).length;
+      return acc;
+    },
+    {} as Record<ProjectStatus, number>,
+  );
 
-  const staleCount = allProjects.filter(
-    (p) => p.status === 'in_progress' && p.daysSinceLastSession > 30
-  ).length;
+  const staleCount = allProjects.filter((p) => p.status === 'in_progress' && p.daysSinceLastSession > 30).length;
 
   if (loading && projects.length === 0) {
     return <div className="text-center py-20 text-slate-400">Loading projects...</div>;
@@ -156,7 +171,9 @@ export default function ProjectList() {
           label="All"
           count={allProjects.length}
           isActive={filter === 'all'}
-          onClick={() => { setFilter('all'); }}
+          onClick={() => {
+            setFilter('all');
+          }}
         />
         {ALL_STATUSES.map((s) => (
           <FilterTab
@@ -164,26 +181,41 @@ export default function ProjectList() {
             label={STATUS_CONFIG[s].label}
             count={counts[s]}
             isActive={filter === s}
-            onClick={() => { setFilter(s); }}
+            onClick={() => {
+              setFilter(s);
+            }}
           />
         ))}
       </div>
 
       {/* Stale projects callout */}
-      {staleCount > 0 && filter !== 'shipped' && filter !== 'ready_to_ship' && filter !== 'abandoned' && filter !== 'ignore' && filter !== 'one_off' && filter !== 'experiment' && (
-        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-          <strong>{String(staleCount)} project{staleCount > 1 ? 's' : ''}</strong> marked "In Progress" but untouched for 30+ days.
-        </div>
-      )}
+      {staleCount > 0 &&
+        filter !== 'shipped' &&
+        filter !== 'ready_to_ship' &&
+        filter !== 'abandoned' &&
+        filter !== 'ignore' &&
+        filter !== 'one_off' &&
+        filter !== 'experiment' && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+            <strong>
+              {String(staleCount)} project{staleCount > 1 ? 's' : ''}
+            </strong>{' '}
+            marked "In Progress" but untouched for 30+ days.
+          </div>
+        )}
 
       {projects.length === 0 ? (
-        <div className="text-center py-12 text-slate-400">
-          No projects with this status
-        </div>
+        <div className="text-center py-12 text-slate-400">No projects with this status</div>
       ) : (
         <div className="space-y-2">
           {projects.map((project) => (
-            <ProjectRow key={project.path} project={project} onStatusChange={() => { void refetch(); }} />
+            <ProjectRow
+              key={project.path}
+              project={project}
+              onStatusChange={() => {
+                void refetch();
+              }}
+            />
           ))}
         </div>
       )}
@@ -206,17 +238,11 @@ function FilterTab({
     <button
       onClick={onClick}
       className={`px-3 py-1.5 text-sm rounded-md transition-all ${
-        isActive
-          ? 'bg-white shadow text-slate-800 font-medium'
-          : 'text-slate-600 hover:bg-gray-200'
+        isActive ? 'bg-white shadow text-slate-800 font-medium' : 'text-slate-600 hover:bg-gray-200'
       }`}
     >
       {label}
-      {count > 0 && (
-        <span className={`ml-1.5 ${isActive ? 'text-slate-500' : 'text-slate-400'}`}>
-          {String(count)}
-        </span>
-      )}
+      {count > 0 && <span className={`ml-1.5 ${isActive ? 'text-slate-500' : 'text-slate-400'}`}>{String(count)}</span>}
     </button>
   );
 }

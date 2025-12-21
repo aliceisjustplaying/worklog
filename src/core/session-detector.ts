@@ -1,10 +1,11 @@
-import { join, dirname } from 'path';
-import { homedir } from 'os';
-import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
 import { createHash } from 'crypto';
-import { isFileProcessed } from './db';
-import { findAllCodexSessionFiles } from './codex-detector';
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { homedir } from 'os';
+import { dirname, join } from 'path';
+
 import type { SessionFile } from '../types';
+import { findAllCodexSessionFiles } from './codex-detector';
+import { isFileProcessed } from './db';
 
 /**
  * Find the git root for a given path.
@@ -27,20 +28,14 @@ export function findGitRoot(path: string): string | null {
   return null;
 }
 
-
 /**
  * Get possible Claude config directories
  */
 export function getClaudePaths(): string[] {
   const envPaths = process.env.CLAUDE_CONFIG_DIR?.split(',') ?? [];
-  const defaults = [
-    join(homedir(), '.config', 'claude'),
-    join(homedir(), '.claude'),
-  ];
+  const defaults = [join(homedir(), '.config', 'claude'), join(homedir(), '.claude')];
 
-  return [...envPaths, ...defaults].filter((p) =>
-    existsSync(join(p, 'projects'))
-  );
+  return [...envPaths, ...defaults].filter((p) => existsSync(join(p, 'projects')));
 }
 
 /**
@@ -94,12 +89,7 @@ function extractCwdFromSessionFile(filePath: string): string | null {
       if (!line.trim()) continue;
       try {
         const entry: unknown = JSON.parse(line);
-        if (
-          typeof entry === 'object' &&
-          entry !== null &&
-          'cwd' in entry &&
-          typeof entry.cwd === 'string'
-        ) {
+        if (typeof entry === 'object' && entry !== null && 'cwd' in entry && typeof entry.cwd === 'string') {
           return entry.cwd;
         }
       } catch {
@@ -184,10 +174,7 @@ function stripDatePrefix(name: string): string {
   return name.replace(/^\d{4}-\d{2}-\d{2}-/, '');
 }
 
-export function decodeProjectFolder(
-  folderName: string,
-  sessionFilePath?: string
-): { path: string; name: string } {
+export function decodeProjectFolder(folderName: string, sessionFilePath?: string): { path: string; name: string } {
   // Remove leading dash
   const withoutLeading = folderName.slice(1);
 
@@ -321,9 +308,7 @@ export function findAllSessionFiles(): SessionFile[] {
 /**
  * Find unprocessed or modified session files
  */
-export async function findUnprocessedSessions(
-  force = false
-): Promise<SessionFile[]> {
+export async function findUnprocessedSessions(force = false): Promise<SessionFile[]> {
   const allSessions = findAllSessions();
 
   if (force) {
@@ -360,10 +345,7 @@ async function computeFileHash(filePath: string): Promise<string> {
 /**
  * Filter sessions by date
  */
-export function filterSessionsByDate(
-  sessions: SessionFile[],
-  _targetDate: string
-): SessionFile[] {
+export function filterSessionsByDate(sessions: SessionFile[], _targetDate: string): SessionFile[] {
   // We need to peek into files to check dates, but that's expensive
   // For now, return all and let the processor filter
   return sessions;

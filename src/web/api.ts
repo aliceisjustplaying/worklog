@@ -1,5 +1,5 @@
-import { getDays, getDayDetail, getStats, getProjects, updateProjectStatus } from '../core/db';
 import { processCommand } from '../cli/process';
+import { getDayDetail, getDays, getProjects, getStats, updateProjectStatus } from '../core/db';
 import type { ProjectStatus } from '../types';
 
 type ApiHandler = (req: Request, url: URL) => Promise<Response>;
@@ -18,10 +18,7 @@ const routes: Record<string, ApiHandler> = {
   'PATCH /api/projects/status': handleUpdateProjectStatus,
 };
 
-export async function handleApiRequest(
-  req: Request,
-  url: URL
-): Promise<Response> {
+export async function handleApiRequest(req: Request, url: URL): Promise<Response> {
   const method = req.method;
   const path = url.pathname;
 
@@ -46,10 +43,7 @@ export async function handleApiRequest(
   return jsonResponse({ error: 'Not found' }, 404);
 }
 
-function matchPath(
-  pattern: string,
-  path: string
-): Record<string, string> | null {
+function matchPath(pattern: string, path: string): Record<string, string> | null {
   const patternParts = pattern.split('/');
   const pathParts = path.split('/');
 
@@ -118,12 +112,14 @@ function handleGetDayBrag(_req: Request, url: URL): Promise<Response> {
     return Promise.resolve(jsonResponse({ error: 'Day not found' }, 404));
   }
 
-  return Promise.resolve(jsonResponse({
-    date,
-    bragSummary: detail.bragSummary ?? 'No summary available',
-    projectCount: detail.projects.length,
-    sessionCount: detail.stats.totalSessions,
-  }));
+  return Promise.resolve(
+    jsonResponse({
+      date,
+      bragSummary: detail.bragSummary ?? 'No summary available',
+      projectCount: detail.projects.length,
+      sessionCount: detail.stats.totalSessions,
+    }),
+  );
 }
 
 function handleGetStats(_req: Request, _url: URL): Promise<Response> {
@@ -153,7 +149,7 @@ async function handleRefresh(_req: Request, _url: URL): Promise<Response> {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
       },
-      500
+      500,
     );
   }
 }
@@ -171,7 +167,15 @@ async function handleUpdateProjectStatus(req: Request, _url: URL): Promise<Respo
     return jsonResponse({ error: 'Missing path or status' }, 400);
   }
 
-  const validStatuses: ProjectStatus[] = ['shipped', 'in_progress', 'ready_to_ship', 'abandoned', 'ignore', 'one_off', 'experiment'];
+  const validStatuses: ProjectStatus[] = [
+    'shipped',
+    'in_progress',
+    'ready_to_ship',
+    'abandoned',
+    'ignore',
+    'one_off',
+    'experiment',
+  ];
   if (!validStatuses.includes(body.status)) {
     return jsonResponse({ error: 'Invalid status' }, 400);
   }

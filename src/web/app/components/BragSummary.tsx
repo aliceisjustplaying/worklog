@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Copy, Check, Sparkles } from 'lucide-react';
+import { Check, Copy, Sparkles } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
 
 interface Props {
   summary: string;
@@ -12,12 +12,7 @@ interface DailySummary {
 function parseSummary(summary: string): DailySummary | null {
   try {
     const parsed = JSON.parse(summary) as unknown;
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      'projects' in parsed &&
-      Array.isArray(parsed.projects)
-    ) {
+    if (typeof parsed === 'object' && parsed !== null && 'projects' in parsed && Array.isArray(parsed.projects)) {
       return parsed as DailySummary;
     }
   } catch {
@@ -33,12 +28,12 @@ export default function BragSummary({ summary }: Props) {
 
   const handleCopy = () => {
     // Copy as readable text
-    const text = parsed !== null
-      ? parsed.projects.map(p => `${p.name}: ${p.summary}`).join('\n')
-      : summary;
+    const text = parsed !== null ? parsed.projects.map((p) => `${p.name}: ${p.summary}`).join('\n') : summary;
     void navigator.clipboard.writeText(text);
     setCopied(true);
-    setTimeout(() => { setCopied(false); }, 2000);
+    setTimeout(() => {
+      setCopied(false);
+    }, 2000);
   };
 
   if (summary.length === 0) return null;
@@ -67,10 +62,11 @@ export default function BragSummary({ summary }: Props) {
                 <li key={i} className="text-sm">
                   <span className="font-semibold text-slate-800">{project.name}</span>
                   {project.isNew === true && (
-                    <span className="ml-1.5 px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">NEW</span>
+                    <span className="ml-1.5 px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">
+                      NEW
+                    </span>
                   )}
-                  <span className="text-slate-800">:</span>{' '}
-                  <span className="text-slate-600">{project.summary}</span>
+                  <span className="text-slate-800">:</span> <span className="text-slate-600">{project.summary}</span>
                 </li>
               ))}
             </ul>

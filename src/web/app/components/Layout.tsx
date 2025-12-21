@@ -1,7 +1,8 @@
+import { Activity, Calendar, Folder, RefreshCw } from 'lucide-react';
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { RefreshCw, Activity, Calendar, Folder } from 'lucide-react';
-import { useStats, useRefresh } from '../hooks/useWorklog';
+
+import { useRefresh, useStats } from '../hooks/useWorklog';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { stats, refetch: refetchStats } = useStats();
@@ -65,9 +66,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        {children}
-      </main>
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4">{children}</main>
     </div>
   );
 }

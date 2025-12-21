@@ -1,20 +1,21 @@
 import { Database } from 'bun:sqlite';
+import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { mkdirSync, existsSync } from 'fs';
+
 import type {
-  DBSessionSummary,
   DBDailySummary,
   DBProcessedFile,
-  SessionSummary,
-  ParsedSession,
-  SessionStats,
-  SessionSource,
-  DayListItem,
+  DBSessionSummary,
   DayDetail,
+  DayListItem,
+  ParsedSession,
   ProjectDetail,
-  SessionDetail,
   ProjectListItem,
   ProjectStatus,
+  SessionDetail,
+  SessionSource,
+  SessionStats,
+  SessionSummary,
 } from '../types';
 
 const DATA_DIR = join(import.meta.dir, '../../data');
@@ -106,9 +107,7 @@ function runMigrations(): void {
   }
 
   // Check if source column exists
-  const columns = database
-    .query<{ name: string }, []>(`PRAGMA table_info(session_summaries)`)
-    .all();
+  const columns = database.query<{ name: string }, []>(`PRAGMA table_info(session_summaries)`).all();
 
   const hasSourceColumn = columns.some((col) => col.name === 'source');
 
@@ -124,9 +123,9 @@ function runMigrations(): void {
 // Processed files tracking
 export function isFileProcessed(filePath: string, fileHash: string): boolean {
   const database = getDb();
-  const row = database.query<DBProcessedFile, [string]>(
-    'SELECT * FROM processed_files WHERE file_path = ?'
-  ).get(filePath);
+  const row = database
+    .query<DBProcessedFile, [string]>('SELECT * FROM processed_files WHERE file_path = ?')
+    .get(filePath);
 
   return row !== null && row.file_hash === fileHash;
 }
@@ -136,7 +135,7 @@ export function markFileProcessed(filePath: string, fileHash: string): void {
   database.run(
     `INSERT OR REPLACE INTO processed_files (file_path, file_hash, processed_at)
      VALUES (?, ?, ?)`,
-    [filePath, fileHash, new Date().toISOString()]
+    [filePath, fileHash, new Date().toISOString()],
   );
 }
 
@@ -144,7 +143,7 @@ export function markFileProcessed(filePath: string, fileHash: string): void {
 export function saveSessionSummary(
   session: ParsedSession,
   summary: SessionSummary,
-  source: SessionSource = 'claude'
+  source: SessionSource = 'claude',
 ): void {
   const database = getDb();
   database.run(
@@ -167,7 +166,7 @@ export function saveSessionSummary(
       JSON.stringify(session.stats),
       source,
       new Date().toISOString(),
-    ]
+    ],
   );
 }
 
@@ -176,30 +175,23 @@ export function saveDailySummary(
   date: string,
   bragSummary: string,
   projectsWorked: string[],
-  totalSessions: number
+  totalSessions: number,
 ): void {
   const database = getDb();
   database.run(
     `INSERT OR REPLACE INTO daily_summaries
      (date, brag_summary, projects_worked, total_sessions, generated_at)
      VALUES (?, ?, ?, ?, ?)`,
-    [
-      date,
-      bragSummary,
-      JSON.stringify(projectsWorked),
-      totalSessions,
-      new Date().toISOString(),
-    ]
+    [date, bragSummary, JSON.stringify(projectsWorked), totalSessions, new Date().toISOString()],
   );
 }
 
 // Query functions for API
 export function getDays(limit = 365): DayListItem[] {
   const database = getDb();
-  const rows = database.query<
-    { date: string; project_count: number; session_count: number },
-    [number]
-  >(`
+  const rows = database
+    .query<{ date: string; project_count: number; session_count: number }, [number]>(
+      `
     SELECT
       date,
       COUNT(DISTINCT project_path) as project_count,
@@ -208,12 +200,14 @@ export function getDays(limit = 365): DayListItem[] {
     GROUP BY date
     ORDER BY date DESC
     LIMIT ?
-  `).all(limit);
+  `,
+    )
+    .all(limit);
 
   const dailySummaries = new Map<string, string>();
-  const summaryRows = database.query<{ date: string; brag_summary: string }, []>(
-    'SELECT date, brag_summary FROM daily_summaries'
-  ).all();
+  const summaryRows = database
+    .query<{ date: string; brag_summary: string }, []>('SELECT date, brag_summary FROM daily_summaries')
+    .all();
   for (const row of summaryRows) {
     dailySummaries.set(row.date, row.brag_summary);
   }
@@ -228,15 +222,15 @@ export function getDays(limit = 365): DayListItem[] {
 
 export function getDayDetail(date: string): DayDetail | null {
   const database = getDb();
-  const sessions = database.query<DBSessionSummary, [string]>(
-    'SELECT * FROM session_summaries WHERE date = ? ORDER BY start_time'
-  ).all(date);
+  const sessions = database
+    .query<DBSessionSummary, [string]>('SELECT * FROM session_summaries WHERE date = ? ORDER BY start_time')
+    .all(date);
 
   if (sessions.length === 0) return null;
 
-  const dailySummary = database.query<DBDailySummary, [string]>(
-    'SELECT * FROM daily_summaries WHERE date = ?'
-  ).get(date);
+  const dailySummary = database
+    .query<DBDailySummary, [string]>('SELECT * FROM daily_summaries WHERE date = ?')
+    .get(date);
 
   // Group by project
   const projectMap = new Map<string, SessionDetail[]>();
@@ -262,13 +256,11 @@ export function getDayDetail(date: string): DayDetail | null {
     projectMap.set(session.project_path, existing);
   }
 
-  const projects: ProjectDetail[] = Array.from(projectMap.entries()).map(
-    ([path, sessions]) => ({
-      name: sessions[0]?.sessionId ? path.split('/').pop() ?? path : path,
-      path,
-      sessions,
-    })
-  );
+  const projects: ProjectDetail[] = Array.from(projectMap.entries()).map(([path, sessions]) => ({
+    name: sessions[0]?.sessionId ? (path.split('/').pop() ?? path) : path,
+    path,
+    sessions,
+  }));
 
   // Get project name from first session
   for (const project of projects) {
@@ -295,16 +287,17 @@ export function getStats(): {
   totalProjects: number;
 } {
   const database = getDb();
-  const stats = database.query<
-    { total_sessions: number; total_days: number; total_projects: number },
-    []
-  >(`
+  const stats = database
+    .query<{ total_sessions: number; total_days: number; total_projects: number }, []>(
+      `
     SELECT
       COUNT(*) as total_sessions,
       COUNT(DISTINCT date) as total_days,
       COUNT(DISTINCT project_path) as total_projects
     FROM session_summaries
-  `).get();
+  `,
+    )
+    .get();
 
   return {
     totalSessions: stats?.total_sessions ?? 0,
@@ -315,20 +308,24 @@ export function getStats(): {
 
 export function getSessionsForDate(date: string): DBSessionSummary[] {
   const database = getDb();
-  return database.query<DBSessionSummary, [string]>(
-    'SELECT * FROM session_summaries WHERE date = ? ORDER BY start_time'
-  ).all(date);
+  return database
+    .query<DBSessionSummary, [string]>('SELECT * FROM session_summaries WHERE date = ? ORDER BY start_time')
+    .all(date);
 }
 
 export function getDatesWithoutBragSummary(): string[] {
   const database = getDb();
-  const rows = database.query<{ date: string }, []>(`
+  const rows = database
+    .query<{ date: string }, []>(
+      `
     SELECT DISTINCT s.date
     FROM session_summaries s
     LEFT JOIN daily_summaries d ON s.date = d.date
     WHERE d.date IS NULL
     ORDER BY s.date DESC
-  `).all();
+  `,
+    )
+    .all();
 
   return rows.map((r) => r.date);
 }
@@ -338,9 +335,12 @@ export function getDatesWithoutBragSummary(): string[] {
  */
 export function isNewProject(projectPath: string, beforeDate: string): boolean {
   const database = getDb();
-  const row = database.query<{ count: number }, [string, string]>(
-    'SELECT COUNT(*) as count FROM session_summaries WHERE project_path = ? AND date < ?'
-  ).get(projectPath, beforeDate);
+  const row = database
+    .query<
+      { count: number },
+      [string, string]
+    >('SELECT COUNT(*) as count FROM session_summaries WHERE project_path = ? AND date < ?')
+    .get(projectPath, beforeDate);
 
   return (row?.count ?? 0) === 0;
 }
@@ -352,14 +352,12 @@ export function getNewProjectsForDate(date: string): string[] {
   const database = getDb();
 
   // Get all projects that appear on this date
-  const projectsOnDate = database.query<{ project_path: string }, [string]>(
-    'SELECT DISTINCT project_path FROM session_summaries WHERE date = ?'
-  ).all(date);
+  const projectsOnDate = database
+    .query<{ project_path: string }, [string]>('SELECT DISTINCT project_path FROM session_summaries WHERE date = ?')
+    .all(date);
 
   // Filter to those with no prior sessions
-  return projectsOnDate
-    .filter((p) => isNewProject(p.project_path, date))
-    .map((p) => p.project_path);
+  return projectsOnDate.filter((p) => isNewProject(p.project_path, date)).map((p) => p.project_path);
 }
 
 // ============ Project Status Tracking ============
@@ -375,16 +373,10 @@ function backfillProjectsIfNeeded(): void {
 
   // Check if projects table is empty but sessions exist
   const projectCount =
-    database
-      .query<{ count: number }, []>('SELECT COUNT(*) as count FROM projects')
-      .get()?.count ?? 0;
+    database.query<{ count: number }, []>('SELECT COUNT(*) as count FROM projects').get()?.count ?? 0;
 
   const sessionCount =
-    database
-      .query<{ count: number }, []>(
-        'SELECT COUNT(*) as count FROM session_summaries'
-      )
-      .get()?.count ?? 0;
+    database.query<{ count: number }, []>('SELECT COUNT(*) as count FROM session_summaries').get()?.count ?? 0;
 
   if (projectCount === 0 && sessionCount > 0) {
     console.log('Backfilling projects table from session data...');
@@ -409,13 +401,10 @@ function backfillProjectsIfNeeded(): void {
       FROM session_summaries
       GROUP BY project_path
     `,
-      [now, now]
+      [now, now],
     );
 
-    const filled =
-      database
-        .query<{ count: number }, []>('SELECT COUNT(*) as count FROM projects')
-        .get()?.count ?? 0;
+    const filled = database.query<{ count: number }, []>('SELECT COUNT(*) as count FROM projects').get()?.count ?? 0;
     console.log(`Created ${String(filled)} project records.`);
   }
 }
@@ -423,11 +412,7 @@ function backfillProjectsIfNeeded(): void {
 /**
  * Upsert project when processing a session
  */
-export function upsertProjectFromSession(
-  projectPath: string,
-  projectName: string,
-  sessionDate: string
-): void {
+export function upsertProjectFromSession(projectPath: string, projectName: string, sessionDate: string): void {
   const database = getDb();
   const now = new Date().toISOString();
 
@@ -446,7 +431,7 @@ export function upsertProjectFromSession(
       total_sessions = (SELECT COUNT(*) FROM session_summaries WHERE project_path = excluded.project_path),
       updated_at = excluded.updated_at
   `,
-    [projectPath, projectName, sessionDate, sessionDate, now, now]
+    [projectPath, projectName, sessionDate, sessionDate, now, now],
   );
 }
 
@@ -508,14 +493,12 @@ export function getProjects(status?: ProjectStatus): ProjectListItem[] {
 /**
  * Update a project's status
  */
-export function updateProjectStatus(
-  projectPath: string,
-  status: ProjectStatus
-): boolean {
+export function updateProjectStatus(projectPath: string, status: ProjectStatus): boolean {
   const database = getDb();
-  const result = database.run(
-    `UPDATE projects SET status = ?, updated_at = ? WHERE project_path = ?`,
-    [status, new Date().toISOString(), projectPath]
-  );
+  const result = database.run(`UPDATE projects SET status = ?, updated_at = ? WHERE project_path = ?`, [
+    status,
+    new Date().toISOString(),
+    projectPath,
+  ]);
   return result.changes > 0;
 }

@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 import { parseArgs } from 'util';
-import { processCommand } from './process';
+
+import { getDatesWithoutBragSummary, getSessionsForDate, getStats, saveDailySummary } from '../core/db';
 import { getSessionStats } from '../core/session-detector';
-import { getStats, getDatesWithoutBragSummary, getSessionsForDate, saveDailySummary } from '../core/db';
 import { generateDailyBragSummary } from '../core/summarizer';
+import { processCommand } from './process';
 
 interface DailySummaryParsed {
   projects: { name: string; summary: string }[];
@@ -138,7 +139,7 @@ async function regenerateCommand(force: boolean) {
 
     try {
       const summary = await generateDailyBragSummary(date, sessions);
-      const projectNames = [...new Set(sessions.map(s => s.project_name))].filter((n): n is string => n !== null);
+      const projectNames = [...new Set(sessions.map((s) => s.project_name))].filter((n): n is string => n !== null);
       saveDailySummary(date, summary, projectNames, sessions.length);
 
       // Parse and show preview

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface DayListItem {
   date: string;
@@ -58,7 +58,9 @@ export function useDays() {
     }
   }, []);
 
-  useEffect(() => { void fetchDays(); }, [fetchDays]);
+  useEffect(() => {
+    void fetchDays();
+  }, [fetchDays]);
 
   return { days, loading, error, refetch: fetchDays };
 }
@@ -104,7 +106,9 @@ export function useStats() {
     }
   }, []);
 
-  useEffect(() => { void fetchStats(); }, [fetchStats]);
+  useEffect(() => {
+    void fetchStats();
+  }, [fetchStats]);
   return { stats, refetch: fetchStats };
 }
 

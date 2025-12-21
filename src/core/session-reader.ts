@@ -1,13 +1,7 @@
 import { createReadStream } from 'fs';
 import * as readline from 'readline';
-import type {
-  RawSessionEntry,
-  ParsedSession,
-  ParsedMessage,
-  ToolUse,
-  SessionStats,
-  MessageContent,
-} from '../types';
+
+import type { MessageContent, ParsedMessage, ParsedSession, RawSessionEntry, SessionStats, ToolUse } from '../types';
 
 /**
  * Get the "effective date" for a timestamp using a 3am boundary.
@@ -22,9 +16,7 @@ function getEffectiveDate(timestamp: string): string {
 /**
  * Stream-parse a JSONL session file
  */
-export async function* parseJSONLStream(
-  filePath: string
-): AsyncGenerator<RawSessionEntry> {
+export async function* parseJSONLStream(filePath: string): AsyncGenerator<RawSessionEntry> {
   const rl = readline.createInterface({
     input: createReadStream(filePath),
     crlfDelay: Infinity,
@@ -46,7 +38,7 @@ export async function* parseJSONLStream(
 export async function parseSessionFile(
   filePath: string,
   projectPath: string,
-  projectName: string
+  projectName: string,
 ): Promise<ParsedSession> {
   const messages: ParsedMessage[] = [];
   const toolCalls: Record<string, number> = {};
@@ -190,10 +182,7 @@ function extractToolUses(content: MessageContent[]): ToolUse[] {
 /**
  * Summarize tool input for display (truncate long content)
  */
-function summarizeToolInput(
-  toolName: string,
-  input: Record<string, unknown>
-): string {
+function summarizeToolInput(toolName: string, input: Record<string, unknown>): string {
   const MAX_LENGTH = 200;
 
   switch (toolName) {
@@ -282,7 +271,11 @@ function isBackend(file: string): boolean {
     lower.includes('/controllers/') ||
     lower.includes('/models/') ||
     lower.includes('/utils/') ||
-    (lower.endsWith('.ts') && !lower.endsWith('.test.ts') && !lower.endsWith('.spec.ts') && !lower.endsWith('.d.ts') && !isFrontend(file))
+    (lower.endsWith('.ts') &&
+      !lower.endsWith('.test.ts') &&
+      !lower.endsWith('.spec.ts') &&
+      !lower.endsWith('.d.ts') &&
+      !isFrontend(file))
   );
 }
 
@@ -347,11 +340,7 @@ export function classifyWork(files: string[]): WorkClassification {
     }
 
     // Docs
-    if (
-      lower.endsWith('.md') ||
-      lower.includes('/docs/') ||
-      lower.includes('/documentation/')
-    ) {
+    if (lower.endsWith('.md') || lower.includes('/docs/') || lower.includes('/documentation/')) {
       scope.docs++;
       continue;
     }
@@ -493,21 +482,21 @@ export function createCondensedTranscript(session: ParsedSession): string {
   // Show action summary at the TOP
   if (filesWritten.length > 0) {
     parts.push(`FILES CREATED (${filesWritten.length.toString()}):`);
-    filesWritten.slice(0, 15).forEach(f => parts.push(`  - ${f}`));
+    filesWritten.slice(0, 15).forEach((f) => parts.push(`  - ${f}`));
     if (filesWritten.length > 15) parts.push(`  ... and ${(filesWritten.length - 15).toString()} more`);
     parts.push('');
   }
 
   if (filesEdited.length > 0) {
     parts.push(`FILES EDITED (${filesEdited.length.toString()}):`);
-    filesEdited.slice(0, 15).forEach(f => parts.push(`  - ${f}`));
+    filesEdited.slice(0, 15).forEach((f) => parts.push(`  - ${f}`));
     if (filesEdited.length > 15) parts.push(`  ... and ${(filesEdited.length - 15).toString()} more`);
     parts.push('');
   }
 
   if (commandsRun.length > 0) {
     parts.push(`COMMANDS RUN (${commandsRun.length.toString()}):`);
-    commandsRun.slice(0, 5).forEach(c => parts.push(`  $ ${c}`));
+    commandsRun.slice(0, 5).forEach((c) => parts.push(`  $ ${c}`));
     parts.push('');
   }
 

@@ -1,8 +1,9 @@
-import { join } from 'path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { homedir } from 'os';
-import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
-import { findGitRoot } from './session-detector';
+import { join } from 'path';
+
 import type { SessionFile } from '../types';
+import { findGitRoot } from './session-detector';
 
 /**
  * New format (post-October 2025): session_meta type with nested payload
@@ -55,9 +56,7 @@ export function getCodexPaths(): string[] {
  * Extract metadata from a Codex session file
  * Supports both new format (session_meta) and old format (pre-October 2025)
  */
-function extractCodexSessionMeta(
-  filePath: string
-): { cwd: string; sessionId: string; gitBranch: string } | null {
+function extractCodexSessionMeta(filePath: string): { cwd: string; sessionId: string; gitBranch: string } | null {
   try {
     const content = readFileSync(filePath, 'utf-8');
     const lines = content.split('\n');
@@ -69,11 +68,7 @@ function extractCodexSessionMeta(
     // Type guard for new format
     const isNewFormat = (e: unknown): e is NewFormatEntry => {
       return (
-        typeof e === 'object' &&
-        e !== null &&
-        'type' in e &&
-        typeof e.type === 'string' &&
-        e.type === 'session_meta'
+        typeof e === 'object' && e !== null && 'type' in e && typeof e.type === 'string' && e.type === 'session_meta'
       );
     };
 
@@ -112,16 +107,9 @@ function extractCodexSessionMeta(
         if (line.length === 0) continue;
         try {
           const msg = JSON.parse(line) as OldFormatMessage;
-          if (
-            msg.type === 'message' &&
-            msg.content !== undefined &&
-            Array.isArray(msg.content)
-          ) {
+          if (msg.type === 'message' && msg.content !== undefined && Array.isArray(msg.content)) {
             for (const block of msg.content) {
-              if (
-                block.type === 'input_text' &&
-                block.text?.includes('Current working directory:') === true
-              ) {
+              if (block.type === 'input_text' && block.text?.includes('Current working directory:') === true) {
                 const cwdRegex = /Current working directory: ([^\n\\]+)/;
                 const match = cwdRegex.exec(block.text);
                 const extractedCwd = match?.[1];

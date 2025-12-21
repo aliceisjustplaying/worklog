@@ -1,6 +1,7 @@
 import { createReadStream } from 'fs';
 import * as readline from 'readline';
-import type { ParsedSession, ParsedMessage, ToolUse, SessionStats } from '../types';
+
+import type { ParsedMessage, ParsedSession, SessionStats, ToolUse } from '../types';
 
 // Codex JSONL entry types
 interface CodexEntry {
@@ -64,9 +65,7 @@ function getEffectiveDate(timestamp: string): string {
 /**
  * Stream-parse a Codex JSONL session file
  */
-async function* parseCodexJSONLStream(
-  filePath: string
-): AsyncGenerator<CodexEntry> {
+async function* parseCodexJSONLStream(filePath: string): AsyncGenerator<CodexEntry> {
   const rl = readline.createInterface({
     input: createReadStream(filePath),
     crlfDelay: Infinity,
@@ -129,7 +128,11 @@ function summarizeCodexToolInput(name: string, payload: CodexResponseItem): stri
       let cmd = '';
       if (Array.isArray(args.command)) {
         cmd = args.command.join(' ');
-      } else if (typeof args.command === 'string' || typeof args.command === 'number' || typeof args.command === 'boolean') {
+      } else if (
+        typeof args.command === 'string' ||
+        typeof args.command === 'number' ||
+        typeof args.command === 'boolean'
+      ) {
         cmd = String(args.command);
       }
       return truncate(cmd, MAX_LENGTH);
@@ -164,7 +167,10 @@ function extractTextFromContent(content: CodexContentItem[] | undefined): string
   const texts: string[] = [];
   for (const item of content) {
     // Handle both new format ('text') and old format ('input_text', 'output_text')
-    if ((item.type === 'text' || item.type === 'input_text' || item.type === 'output_text') && item.text !== undefined) {
+    if (
+      (item.type === 'text' || item.type === 'input_text' || item.type === 'output_text') &&
+      item.text !== undefined
+    ) {
       texts.push(item.text);
     }
   }
@@ -177,7 +183,7 @@ function extractTextFromContent(content: CodexContentItem[] | undefined): string
 export async function parseCodexSessionFile(
   filePath: string,
   projectPath: string,
-  projectName: string
+  projectName: string,
 ): Promise<ParsedSession> {
   const messages: ParsedMessage[] = [];
   const toolCalls: Record<string, number> = {};
@@ -212,7 +218,7 @@ export async function parseCodexSessionFile(
     if (rawEntry.id !== undefined && rawEntry.type === undefined && rawEntry.git !== undefined) {
       sessionId = rawEntry.id as string;
       const git = rawEntry.git as Record<string, unknown>;
-      gitBranch = (git.branch !== undefined ? git.branch as string : '');
+      gitBranch = git.branch !== undefined ? (git.branch as string) : '';
       continue;
     }
 
@@ -318,11 +324,13 @@ export async function parseCodexSessionFile(
                 type: 'assistant',
                 timestamp: (oldEntry.timestamp as string | undefined) ?? '',
                 text: '',
-                toolUses: [{
-                  name: 'Edit',
-                  input: `apply_patch: ${files.join(', ') !== '' ? files.join(', ') : 'file changes'}`,
-                  rawInput: oldEntry,
-                }],
+                toolUses: [
+                  {
+                    name: 'Edit',
+                    input: `apply_patch: ${files.join(', ') !== '' ? files.join(', ') : 'file changes'}`,
+                    rawInput: oldEntry,
+                  },
+                ],
               });
             } else {
               // Regular shell command
@@ -332,11 +340,13 @@ export async function parseCodexSessionFile(
                 type: 'assistant',
                 timestamp: (oldEntry.timestamp as string | undefined) ?? '',
                 text: '',
-                toolUses: [{
-                  name: 'Bash',
-                  input: shellCmd.substring(0, 100),
-                  rawInput: oldEntry,
-                }],
+                toolUses: [
+                  {
+                    name: 'Bash',
+                    input: shellCmd.substring(0, 100),
+                    rawInput: oldEntry,
+                  },
+                ],
               });
             }
           }
@@ -349,7 +359,12 @@ export async function parseCodexSessionFile(
     // Handle old format: top-level message (pre-October 2025)
     // Old format: {"type":"message","role":"user/assistant","content":[{"type":"input_text/output_text","text":"..."}]}
     if (entry.type === 'message') {
-      const msgEntry = entry as unknown as { type: string; role: string; content?: CodexContentItem[]; timestamp?: string };
+      const msgEntry = entry as unknown as {
+        type: string;
+        role: string;
+        content?: CodexContentItem[];
+        timestamp?: string;
+      };
       const text = extractTextFromContent(msgEntry.content);
 
       // Skip environment_context messages (just contain cwd/approval policy info)

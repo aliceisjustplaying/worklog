@@ -1,5 +1,5 @@
+import { FileCode, Folder, Wrench } from 'lucide-react';
 import React, { useMemo } from 'react';
-import { Folder, FileCode, Wrench } from 'lucide-react';
 
 interface SessionDetail {
   sessionId: string;
@@ -74,7 +74,10 @@ export default function ProjectCard({ project, isNew }: Props) {
           </span>
           <div className="flex flex-wrap gap-1.5">
             {aggregated.files.slice(0, 8).map((f, i) => (
-              <span key={i} className="text-xs px-2 py-1 bg-slate-50 text-slate-600 rounded border border-slate-100 font-mono">
+              <span
+                key={i}
+                className="text-xs px-2 py-1 bg-slate-50 text-slate-600 rounded border border-slate-100 font-mono"
+              >
                 {f.split('/').pop()}
               </span>
             ))}

@@ -1,12 +1,14 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { generateObject } from 'ai';
 import { z } from 'zod';
-import type { ParsedSession, SessionSummary, DBSessionSummary } from '../types';
+
+import type { DBSessionSummary, ParsedSession, SessionSummary } from '../types';
 import { createCondensedTranscript } from './session-reader';
 
 const anthropic = createAnthropic({
   apiKey: process.env.WORKLOG_API_KEY,
-  ...(process.env.WORKLOG_BASE_URL !== undefined && process.env.WORKLOG_BASE_URL.length > 0 && { baseURL: process.env.WORKLOG_BASE_URL }),
+  ...(process.env.WORKLOG_BASE_URL !== undefined &&
+    process.env.WORKLOG_BASE_URL.length > 0 && { baseURL: process.env.WORKLOG_BASE_URL }),
   headers: {
     'Accept-Encoding': 'identity',
   },
@@ -47,10 +49,7 @@ function tryRecoverMalformedResponse(error: unknown): {
     if (rawText === undefined || typeof rawText !== 'string') return null;
 
     // Unescape the content
-    const unescaped = rawText
-      .replace(/\\n/g, '\n')
-      .replace(/\\"/g, '"')
-      .replace(/\\\\/g, '\\');
+    const unescaped = rawText.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
 
     // Pattern: the model returned JSON with shortSummary containing the rest
     // Extract: shortSummary ends at ",\n"accomplishments" or similar
@@ -122,24 +121,22 @@ function tryRecoverMalformedResponse(error: unknown): {
 const sessionSummarySchema = z.object({
   shortSummary: z
     .string()
-    .describe('1-2 sentence summary focusing on capabilities/value, not code artifacts. What can users do now? What problem was solved?'),
+    .describe(
+      '1-2 sentence summary focusing on capabilities/value, not code artifacts. What can users do now? What problem was solved?',
+    ),
   accomplishments: z
     .array(z.string())
-    .describe('List of outcomes framed as capabilities or value. Never list modules/types/components as accomplishments.'),
-  filesChanged: z
-    .array(z.string())
-    .describe('List of files that were modified or created'),
-  toolsUsed: z
-    .array(z.string())
-    .describe('List of tools used like Edit, Bash, Read, Write, Grep'),
+    .describe(
+      'List of outcomes framed as capabilities or value. Never list modules/types/components as accomplishments.',
+    ),
+  filesChanged: z.array(z.string()).describe('List of files that were modified or created'),
+  toolsUsed: z.array(z.string()).describe('List of tools used like Edit, Bash, Read, Write, Grep'),
 });
 
 /**
  * Generate a summary for a session using Claude with structured output
  */
-export async function summarizeSession(
-  session: ParsedSession
-): Promise<SessionSummary> {
+export async function summarizeSession(session: ParsedSession): Promise<SessionSummary> {
   const transcript = createCondensedTranscript(session);
 
   const systemPrompt = `Summarize this Claude Code session for a worklog. Be concise.
@@ -175,9 +172,7 @@ Good: "Added dose frequency selection (frontend, backend)"`;
       shortSummary: object.shortSummary,
       accomplishments: object.accomplishments,
       filesChanged: object.filesChanged,
-      toolsUsed: object.toolsUsed.length > 0
-        ? object.toolsUsed
-        : Object.keys(session.stats.toolCalls),
+      toolsUsed: object.toolsUsed.length > 0 ? object.toolsUsed : Object.keys(session.stats.toolCalls),
     };
   } catch (error: unknown) {
     // Haiku sometimes returns double-encoded JSON (valid JSON wrapped in a string)
@@ -188,9 +183,8 @@ Good: "Added dose frequency selection (frontend, backend)"`;
         shortSummary: recovered.shortSummary ?? 'Session completed',
         accomplishments: recovered.accomplishments ?? [],
         filesChanged: recovered.filesChanged ?? [],
-        toolsUsed: (recovered.toolsUsed?.length ?? 0) > 0
-          ? recovered.toolsUsed ?? []
-          : Object.keys(session.stats.toolCalls),
+        toolsUsed:
+          (recovered.toolsUsed?.length ?? 0) > 0 ? (recovered.toolsUsed ?? []) : Object.keys(session.stats.toolCalls),
       };
     }
 
@@ -208,10 +202,16 @@ Good: "Added dose frequency selection (frontend, backend)"`;
 // Schema for daily summary - structured for easy rendering
 const dailySummarySchema = z.object({
   projects: z
-    .array(z.object({
-      name: z.string().describe('Project name - use exactly as given'),
-      summary: z.string().describe('Brief capabilities with scope, like "multi-dose scheduling (backend, frontend), dark mode (frontend)"'),
-    }))
+    .array(
+      z.object({
+        name: z.string().describe('Project name - use exactly as given'),
+        summary: z
+          .string()
+          .describe(
+            'Brief capabilities with scope, like "multi-dose scheduling (backend, frontend), dark mode (frontend)"',
+          ),
+      }),
+    )
     .describe('List of projects with brief outcome summaries including scope'),
 });
 
@@ -233,7 +233,7 @@ export type DailySummary = z.infer<typeof dailySummarySchema>;
 export async function generateDailyBragSummary(
   date: string,
   sessions: DBSessionSummary[],
-  newProjectNames = new Set<string>()
+  newProjectNames = new Set<string>(),
 ): Promise<string> {
   if (sessions.length === 0) {
     return JSON.stringify({ projects: [] });
@@ -304,7 +304,7 @@ Use exact project names. Max ~15 words per project.`;
     console.error('Brag summary error:', (error as Error).message);
 
     // Generate a basic summary on failure
-    const projects = Array.from(accomplishmentsByProject.keys()).map(name => ({
+    const projects = Array.from(accomplishmentsByProject.keys()).map((name) => ({
       name,
       summary: 'Session details unavailable',
       isNew: newProjectNames.has(name) ? true : undefined,

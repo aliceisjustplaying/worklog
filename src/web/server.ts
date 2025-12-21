@@ -1,6 +1,7 @@
 import { serve } from 'bun';
-import { join } from 'path';
 import { existsSync } from 'fs';
+import { join } from 'path';
+
 import { handleApiRequest } from './api';
 
 const PORT = parseInt(process.env.PORT ?? '3456');
@@ -80,7 +81,7 @@ function serveStatic(pathname: string): Response {
 </html>`,
     {
       headers: { 'Content-Type': 'text/html' },
-    }
+    },
   );
 }
 

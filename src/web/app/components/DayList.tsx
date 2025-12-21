@@ -1,8 +1,9 @@
+import { Calendar, ChevronRight, Clock, Layers } from 'lucide-react';
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, ChevronRight, Layers, Clock } from 'lucide-react';
-import { useDays } from '../hooks/useWorklog';
+
 import type { DayListItem } from '../../../types';
+import { useDays } from '../hooks/useWorklog';
 
 // Get ISO week number
 function getWeekNumber(date: Date): number {
@@ -10,7 +11,7 @@ function getWeekNumber(date: Date): number {
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
 // Get week start date for display
@@ -119,11 +120,13 @@ function DayCard({ day }: { day: DayListItem }) {
     <Link to={`/day/${day.date}`} className="block group">
       <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-md transition-colors ${
-            isToday
-              ? 'bg-blue-600 text-white'
-              : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
-          }`}>
+          <div
+            className={`p-2 rounded-md transition-colors ${
+              isToday
+                ? 'bg-blue-600 text-white'
+                : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
+            }`}
+          >
             <Calendar size={18} />
           </div>
           <div>
@@ -157,7 +160,10 @@ export default function DayList() {
       <div className="text-center py-20">
         <Calendar size={48} className="mx-auto text-slate-300 mb-4" />
         <h2 className="text-xl font-semibold text-slate-600 mb-2">No sessions yet</h2>
-        <p className="text-slate-400">Run <code className="bg-slate-100 px-2 py-1 rounded">bun cli process</code> to process your Claude Code sessions.</p>
+        <p className="text-slate-400">
+          Run <code className="bg-slate-100 px-2 py-1 rounded">bun cli process</code> to process your Claude Code
+          sessions.
+        </p>
       </div>
     );
   }

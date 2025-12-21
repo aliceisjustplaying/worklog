@@ -1,17 +1,17 @@
-import { findUnprocessedSessions } from '../core/session-detector';
-import { parseSessionFile } from '../core/session-reader';
 import { parseCodexSessionFile } from '../core/codex-reader';
-import type { SessionFile } from '../types';
-import { summarizeSession, generateDailyBragSummary } from '../core/summarizer';
 import {
-  markFileProcessed,
-  saveSessionSummary,
-  saveDailySummary,
   getDatesWithoutBragSummary,
-  getSessionsForDate,
   getNewProjectsForDate,
+  getSessionsForDate,
+  markFileProcessed,
+  saveDailySummary,
+  saveSessionSummary,
   upsertProjectFromSession,
 } from '../core/db';
+import { findUnprocessedSessions } from '../core/session-detector';
+import { parseSessionFile } from '../core/session-reader';
+import { generateDailyBragSummary, summarizeSession } from '../core/summarizer';
+import type { SessionFile } from '../types';
 
 interface ProcessOptions {
   force: boolean;
@@ -120,9 +120,7 @@ export async function processCommand(options: ProcessOptions): Promise<{
     startDate.setDate(startDate.getDate() - bufferDays);
     endDate.setDate(endDate.getDate() + bufferDays);
 
-    sessions = sessions.filter(s =>
-      s.modifiedAt >= startDate && s.modifiedAt <= endDate
-    );
+    sessions = sessions.filter((s) => s.modifiedAt >= startDate && s.modifiedAt <= endDate);
 
     console.log(`Pre-filtered ${String(originalCount)} → ${String(sessions.length)} sessions by modification time\n`);
   }
@@ -153,7 +151,7 @@ export async function processCommand(options: ProcessOptions): Promise<{
         } catch (error) {
           return { session, error };
         }
-      })
+      }),
     );
     results.push(...batchResults);
   }
@@ -241,7 +239,7 @@ type DateFilter = { type: 'date'; value: string } | { type: 'range'; start: stri
 async function processSession(
   sessionFile: SessionFile,
   verbose: boolean,
-  dateFilter: DateFilter
+  dateFilter: DateFilter,
 ): Promise<{
   date: string;
   startTime: string;
@@ -251,20 +249,15 @@ async function processSession(
   filtered: boolean;
 }> {
   // Parse the session file (dispatch based on source)
-  const parsed = sessionFile.source === 'codex'
-    ? await parseCodexSessionFile(
-        sessionFile.path,
-        sessionFile.projectPath,
-        sessionFile.projectName
-      )
-    : await parseSessionFile(
-        sessionFile.path,
-        sessionFile.projectPath,
-        sessionFile.projectName
-      );
+  const parsed =
+    sessionFile.source === 'codex'
+      ? await parseCodexSessionFile(sessionFile.path, sessionFile.projectPath, sessionFile.projectName)
+      : await parseSessionFile(sessionFile.path, sessionFile.projectPath, sessionFile.projectName);
 
   if (verbose) {
-    console.log(`    Parsed: ${String(parsed.messages.length)} messages, ${String(Object.keys(parsed.stats.toolCalls).length)} tool types`);
+    console.log(
+      `    Parsed: ${String(parsed.messages.length)} messages, ${String(Object.keys(parsed.stats.toolCalls).length)} tool types`,
+    );
   }
 
   // Check date filter BEFORE expensive LLM summarization
@@ -293,7 +286,7 @@ async function processSession(
 
   // Only these tools indicate actual work happened
   const codeChangeTools = ['Edit', 'Write', 'NotebookEdit', 'MultiEdit'];
-  const hasCodeChanges = codeChangeTools.some(tool => (tools[tool] || 0) > 0);
+  const hasCodeChanges = codeChangeTools.some((tool) => (tools[tool] || 0) > 0);
 
   if (!hasCodeChanges) {
     // Mark as processed but don't save to DB
@@ -318,11 +311,17 @@ async function processSession(
 
   // Filter out sessions that the LLM determined had no real work
   const noWorkPhrases = [
-    'no work', 'no coding', 'was interrupted', 'no substantive',
-    'minimal progress', 'minimal activity', 'no significant', 'nothing was accomplished'
+    'no work',
+    'no coding',
+    'was interrupted',
+    'no substantive',
+    'minimal progress',
+    'minimal activity',
+    'no significant',
+    'nothing was accomplished',
   ];
   const summaryLower = summary.shortSummary.toLowerCase();
-  if (noWorkPhrases.some(phrase => summaryLower.includes(phrase))) {
+  if (noWorkPhrases.some((phrase) => summaryLower.includes(phrase))) {
     markFileProcessed(sessionFile.path, sessionFile.fileHash);
     return {
       date: parsed.date,
@@ -349,10 +348,7 @@ async function processSession(
   };
 }
 
-async function regenerateSummariesForDates(
-  datesToRegenerate: Set<string>,
-  verbose: boolean
-): Promise<void> {
+async function regenerateSummariesForDates(datesToRegenerate: Set<string>, verbose: boolean): Promise<void> {
   // Also include any dates that have never had a summary generated
   const datesWithoutSummary = getDatesWithoutBragSummary();
   const allDates = new Set([...datesToRegenerate, ...datesWithoutSummary]);
@@ -367,9 +363,7 @@ async function regenerateSummariesForDates(
       // Find which projects are new (first appearance on this date)
       const newProjectPaths = getNewProjectsForDate(date);
       const newProjectNames = new Set(
-        sessions
-          .filter((s) => newProjectPaths.includes(s.project_path))
-          .map((s) => s.project_name)
+        sessions.filter((s) => newProjectPaths.includes(s.project_path)).map((s) => s.project_name),
       );
 
       if (verbose) {
@@ -392,9 +386,7 @@ async function regenerateSummariesForDates(
   }
 }
 
-function groupByProject(
-  sessions: SessionFile[]
-): Record<string, SessionFile[]> {
+function groupByProject(sessions: SessionFile[]): Record<string, SessionFile[]> {
   const grouped: Record<string, SessionFile[]> = {};
 
   for (const session of sessions) {
